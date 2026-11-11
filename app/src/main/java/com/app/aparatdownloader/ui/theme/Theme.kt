@@ -1,9 +1,11 @@
 package com.app.aparatdownloader.ui.theme
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 
 private val LightColorScheme = lightColorScheme(
     primary = Primary,
@@ -19,8 +21,11 @@ private val LightColorScheme = lightColorScheme(
 
 @Composable
 fun LuminaTheme(content: @Composable () -> Unit) {
-    MaterialTheme(
-        colorScheme = LightColorScheme,
-        content = content
-    )
+    // اپ فارسی است؛ کل رابط راست‌چین می‌شود
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+        MaterialTheme(
+            colorScheme = LightColorScheme,
+            content = content
+        )
+    }
 }
