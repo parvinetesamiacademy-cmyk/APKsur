@@ -1,0 +1,53 @@
+<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>پنل مدیریت</title>
+<style>
+:root{--bg:#fff;--fg:#1a1a1a;--bd:#ddd;--ac:#2563eb}
+@media(prefers-color-scheme:dark){:root{--bg:#161616;--fg:#eee;--bd:#333}}
+body{font-family:Tahoma,sans-serif;background:var(--bg);color:var(--fg);margin:0;padding:12px}
+input,select,button{padding:7px;margin:3px;border:1px solid var(--bd);border-radius:6px;background:var(--bg);color:var(--fg)}
+button{cursor:pointer}button.p{background:var(--ac);color:#fff;border:0}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{border-bottom:1px solid var(--bd);padding:6px;text-align:right}
+.w{overflow-x:auto}.s{display:flex;gap:16px;margin:8px 0}.c{padding:8px 14px;border:1px solid var(--bd);border-radius:8px}
+</style></head><body>
+<div id="login"><h3>ورود ادمین</h3><input id="un" placeholder="نام کاربری"><input id="pw" type="password" placeholder="رمز"><button class="p" onclick="doLogin()">ورود</button></div>
+<div id="app" hidden>
+<div class="s" id="stats"></div>
+<h3>کاربر جدید</h3>
+<input id="n_name" placeholder="نام"><input id="n_phone" placeholder="شماره"><input id="n_nid" placeholder="کد ملی">
+<input id="n_pass" placeholder="رمز اولیه"><input id="n_days" type="number" value="30" style="width:70px"><button class="p" onclick="addUser()">ایجاد</button>
+<h3>دوره‌ها و ویدیوها</h3>
+<input id="p_title" placeholder="عنوان دوره جدید"><input id="p_cover" placeholder="لینک کاور (اختیاری)"><button class="p" onclick="addPl()">افزودن دوره</button>
+<div><select id="pl" onchange="loadVideos()"></select><button onclick="delPl()">حذف دوره</button></div>
+<div><input id="v_title" placeholder="عنوان درس"><input id="v_url" placeholder="لینک آپارات (aparat.com/v/...) یا هش" style="min-width:230px;direction:ltr"><input id="v_pos" type="number" placeholder="ترتیب" style="width:70px"><button class="p" onclick="addVideo()">افزودن درس</button></div>
+<div class="w"><table><thead><tr><th>ترتیب</th><th>عنوان</th><th>هش آپارات</th><th>لینک مستقیم</th><th></th></tr></thead><tbody id="vrows"></tbody></table></div>
+<h3>کاربران</h3>
+<input id="q" placeholder="جستجو نام/شماره/کد ملی" oninput="load()">
+<select id="st" onchange="load()"><option value="">همه</option><option value="active">فعال</option><option value="expired">منقضی</option><option value="banned">مسدود</option></select>
+<div class="w"><table><thead><tr><th>نام</th><th>شماره</th><th>کد ملی</th><th>انقضا</th><th>دستگاه</th><th>عملیات</th></tr></thead><tbody id="rows"></tbody></table></div>
+</div>
+<script>
+const api=(p,m='GET',b)=>fetch('/admin/api/'+p,{method:m,headers:{'content-type':'application/json','X-Requested-With':'vidapp'},body:b?JSON.stringify(b):undefined}).then(r=>r.json());
+const D=t=>new Date(t*1000).toLocaleDateString('fa-IR');
+async function doLogin(){const r=await api('login','POST',{username:un.value,password:pw.value});if(r.ok){login.hidden=true;app.hidden=false;load();loadPl()}else alert(r.error)}
+async function load(){
+ const s=await api('stats');stats.innerHTML=`<div class=c>کل: ${s.total}</div><div class=c>فعال: ${s.active||0}</div><div class=c>منقضی: ${s.expired||0}</div><div class=c>۷ روز به انقضا: ${s.soon||0}</div>`;
+ const us=await api(`users?q=${encodeURIComponent(q.value)}&status=${st.value}`);
+ rows.innerHTML='';us.forEach(u=>{const tr=document.createElement('tr');
+  tr.innerHTML=`<td>${esc(u.full_name)}</td><td>${esc(u.phone)}</td><td>${esc(u.national_id_mask||'-')}</td><td>${D(u.expires_at)}${u.is_active?'':' (مسدود)'}</td><td>${esc(u.model||'-')}</td><td></td>`;
+  const a=tr.lastChild;
+  [['+30',()=>act(u.id,'extend',{days:30})],['+90',()=>act(u.id,'extend',{days:90})],['کد ملی',async()=>alert((await api(`users/${u.id}/national-id`)).national_id)],
+   ['ریست دستگاه',()=>act(u.id,'reset-device',{})],[u.is_active?'مسدود':'رفع مسدودی',()=>act(u.id,u.is_active?'ban':'unban',{})],
+   ['رمز',()=>{const p=prompt('رمز جدید');p&&act(u.id,'password',{password:p})}]].forEach(([t,f])=>{const b=document.createElement('button');b.textContent=t;b.onclick=f;a.appendChild(b)});
+  rows.appendChild(tr)})}
+
+async function loadPl(){const r=await api('playlists');pl.innerHTML=r.map(x=>`<option value="${esc(x.id)}">${esc(x.title)}</option>`).join('');loadVideos()}
+async function loadVideos(){vrows.innerHTML='';if(!pl.value)return;const r=await api('videos?playlist_id='+encodeURIComponent(pl.value));
+ r.forEach(v=>{const tr=document.createElement('tr');tr.innerHTML=`<td>${v.position}</td><td>${esc(v.title)}</td><td dir=ltr>${esc(v.aparat_hash)}</td><td>${v.source_url?'✓':'—'}</td><td></td>`;
+  const b=document.createElement('button');b.textContent='حذف';b.onclick=async()=>{if(confirm('حذف شود؟')){await api(`videos/${v.id}/delete`,'POST',{});loadVideos()}};tr.lastChild.appendChild(b);vrows.appendChild(tr)})}
+async function addPl(){if(!p_title.value)return;const r=await api('playlists','POST',{title:p_title.value,cover_url:p_cover.value});if(r.error)return alert(r.error);p_title.value=p_cover.value='';loadPl()}
+async function delPl(){if(pl.value&&confirm('دوره و همه درس‌هایش حذف شود؟')){await api(`playlists/${pl.value}/delete`,'POST',{});loadPl()}}
+async function addVideo(){const r=await api('videos','POST',{playlist_id:pl.value,title:v_title.value,aparat_url:v_url.value,position:+v_pos.value||0});if(r.error)return alert(r.error);v_title.value=v_url.value=v_pos.value='';loadVideos()}
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function act(id,a,b){await api(`users/${id}/${a}`,'POST',b);load()}
+async function addUser(){const r=await api('users','POST',{full_name:n_name.value,phone:n_phone.value,national_id:n_nid.value,password:n_pass.value,days:+n_days.value});if(r.error)alert(r.error);else load()}
+</script></body></html>
