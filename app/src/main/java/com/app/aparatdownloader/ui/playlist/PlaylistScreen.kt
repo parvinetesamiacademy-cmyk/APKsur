@@ -1,72 +1,71 @@
 package com.app.aparatdownloader.ui.playlist
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.app.aparatdownloader.ui.components.FolderCard
+import com.app.aparatdownloader.data.api.Playlist
+import com.app.aparatdownloader.ui.common.*
+import com.app.aparatdownloader.ui.components.CourseCard
 import com.app.aparatdownloader.ui.theme.*
-
-data class CourseFolder(
-    val id: String,
-    val title: String,
-    val level: String,
-    val subfoldersCount: Int,
-    val videosCount: Int,
-    val progressPercent: Int
-)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PlaylistScreen(onFolderClick: (String) -> Unit, onDownloadAll: (String) -> Unit) {
-    val folders = listOf(
-        CourseFolder(
-            id = "folder_speaking_01",
-            title = "دوره فشرده مکالمه و اسپیکینگ (Pronunciation & Fluency)",
-            level = "C1 - B2",
-            subfoldersCount = 4,
-            videosCount = 32,
-            progressPercent = 65
-        ),
-        CourseFolder(
-            id = "folder_grammar_02",
-            title = "گرامر جامع کاربردی زبان انگلیسی (Applied Grammar)",
-            level = "Intermediate",
-            subfoldersCount = 3,
-            videosCount = 24,
-            progressPercent = 40
-        )
-    )
+fun PlaylistScreen(onFolderClick: (Playlist) -> Unit, onLogout: () -> Unit) {
+    val api = rememberApi()
+    var state by remember { mutableStateOf<LoadState<List<Playlist>>>(LoadState.Loading) }
+    var reloadKey by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(reloadKey) {
+        state = LoadState.Loading
+        state = apiCall { api.getPlaylists() }
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("دوره‌های آموزشی Lumina Academy", color = TextPrimary) },
+                title = { Text("دوره‌ها", color = TextPrimary) },
+                actions = {
+                    IconButton(onClick = { reloadKey++ }) {
+                        Icon(Icons.Default.Refresh, contentDescription = "بروزرسانی", tint = TextSecondary)
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Surface)
             )
         },
         containerColor = Background
     ) { padding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-            contentPadding = PaddingValues(vertical = 12.dp)
-        ) {
-            items(folders) { folder ->
-                FolderCard(
-                    title = folder.title,
-                    level = folder.level,
-                    subfoldersCount = folder.subfoldersCount,
-                    videosCount = folder.videosCount,
-                    progressPercent = folder.progressPercent,
-                    onEnterFolder = { onFolderClick(folder.id) },
-                    onDownloadAll = { onDownloadAll(folder.id) }
-                )
+        Box(Modifier.fillMaxSize().padding(padding)) {
+            when (val s = state) {
+                is LoadState.Loading -> LoadingState()
+                is LoadState.Error -> ErrorState(s, onRetry = { reloadKey++ }, onLogout = onLogout)
+                is LoadState.Success -> {
+                    val list = s.data.sortedBy { it.sort_order ?: Int.MAX_VALUE }
+                    if (list.isEmpty()) {
+                        Text(
+                            "هنوز دوره‌ای برای شما فعال نشده است",
+                            color = TextSecondary,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.align(Alignment.Center).padding(32.dp)
+                        )
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(vertical = 12.dp)
+                        ) {
+                            items(list, key = { it.id }) { playlist ->
+                                CourseCard(playlist = playlist, onClick = { onFolderClick(playlist) })
+                            }
+                        }
+                    }
+                }
             }
         }
     }

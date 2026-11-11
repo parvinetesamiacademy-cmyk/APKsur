@@ -1,5 +1,7 @@
 package com.app.aparatdownloader.ui.navigation
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -7,6 +9,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.app.aparatdownloader.data.api.Playlist
+import com.app.aparatdownloader.data.api.VideoItem
+import com.app.aparatdownloader.ui.common.ComingSoonScreen
 import com.app.aparatdownloader.ui.folder.FolderDetailScreen
 import com.app.aparatdownloader.ui.player.PlayerScreen
 import com.app.aparatdownloader.ui.playlist.PlaylistScreen
@@ -20,31 +25,32 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector)
     object Profile : Screen("profile", "پروفایل", Icons.Default.Person)
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainAppScreen() {
-    var selectedTab by remember { mutableStateOf<String>("courses") }
-    var currentSubScreen by remember { mutableStateOf<String?>(null) }
+fun MainAppScreen(onLogout: () -> Unit) {
+    var selectedTab by remember { mutableStateOf("courses") }
+    var openPlaylist by remember { mutableStateOf<Playlist?>(null) }
+    var openVideo by remember { mutableStateOf<VideoItem?>(null) }
 
-    if (currentSubScreen == "folder_detail") {
+    // دکمه‌ی بازگشت سیستم: پلیر ← لیست دروس ← دوره‌ها
+    BackHandler(enabled = openVideo != null) { openVideo = null }
+    BackHandler(enabled = openVideo == null && openPlaylist != null) { openPlaylist = null }
+
+    if (openPlaylist != null && openVideo != null) {
+        PlayerScreen(onBack = { openVideo = null })
+        return
+    }
+
+    openPlaylist?.let { playlist ->
         FolderDetailScreen(
-            onLessonClick = { currentSubScreen = "player" },
-            onBack = { currentSubScreen = null }
+            playlist = playlist,
+            onLessonClick = { openVideo = it },
+            onBack = { openPlaylist = null },
+            onLogout = onLogout
         )
         return
     }
 
-    if (currentSubScreen == "player") {
-        PlayerScreen(onBack = { currentSubScreen = "folder_detail" })
-        return
-    }
-
-    val items = listOf(
-        Screen.Courses,
-        Screen.Downloads,
-        Screen.Queue,
-        Screen.Profile
-    )
+    val items = listOf(Screen.Courses, Screen.Downloads, Screen.Queue, Screen.Profile)
 
     Scaffold(
         bottomBar = {
@@ -67,20 +73,14 @@ fun MainAppScreen() {
             }
         }
     ) { padding ->
-        androidx.compose.foundation.layout.Box(modifier = Modifier.padding(padding)) {
+        Box(modifier = Modifier.padding(padding)) {
             when (selectedTab) {
                 "courses" -> PlaylistScreen(
-                    onFolderClick = { currentSubScreen = "folder_detail" },
-                    onDownloadAll = { currentSubScreen = "folder_detail" }
+                    onFolderClick = { openPlaylist = it },
+                    onLogout = onLogout
                 )
-                "downloads" -> PlaylistScreen(
-                    onFolderClick = { currentSubScreen = "folder_detail" },
-                    onDownloadAll = { currentSubScreen = "folder_detail" }
-                )
-                "queue" -> PlaylistScreen(
-                    onFolderClick = { currentSubScreen = "folder_detail" },
-                    onDownloadAll = { currentSubScreen = "folder_detail" }
-                )
+                "downloads" -> ComingSoonScreen("دانلودها")
+                "queue" -> ComingSoonScreen("صف دانلود")
                 "profile" -> ProfileScreen()
             }
         }

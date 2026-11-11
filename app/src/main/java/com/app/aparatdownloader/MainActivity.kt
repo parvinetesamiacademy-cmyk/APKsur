@@ -39,7 +39,10 @@ class MainActivity : ComponentActivity() {
                     }
 
                     if (isLoggedIn) {
-                        MainAppScreen()
+                        MainAppScreen(onLogout = {
+                            keyStoreManager.clearAll()
+                            isLoggedIn = false
+                        })
                     } else {
                         AuthScreen(onLoginSuccess = {
                             isLoggedIn = true
