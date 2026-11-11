@@ -23,7 +23,7 @@ fun AuthScreen(onLoginSuccess: () -> Unit) {
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(text = "ورود به اپلیکیشن", style = MaterialTheme.colorScheme.headlineMedium)
+            Text(text = "ورود به اپلیکیشن", style = MaterialTheme.typography.headlineMedium)
             Spacer(modifier = Modifier.height(32.dp))
 
             OutlinedTextField(
