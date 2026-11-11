@@ -79,9 +79,9 @@ fun MainAppScreen(onLogout: () -> Unit) {
                     onFolderClick = { openPlaylist = it },
                     onLogout = onLogout
                 )
-                "downloads" -> ComingSoonScreen("دانلودها")
+                "downloads" -> com.app.aparatdownloader.ui.common.DownloadsScreen()
                 "queue" -> ComingSoonScreen("صف دانلود")
-                "profile" -> ProfileScreen()
+                "profile" -> ProfileScreen(onLogout = onLogout)
             }
         }
     }

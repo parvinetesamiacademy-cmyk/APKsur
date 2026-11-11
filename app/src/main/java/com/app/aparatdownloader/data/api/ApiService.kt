@@ -37,6 +37,16 @@ data class VideoItem(
 data class PlaylistDetail(val id: String, val videos: List<VideoItem>)
 data class VideoSource(val url: String, val type: String?, val aparat_hash: String?, val version: Int)
 data class VideoKey(val key: String)
+data class MeResponse(
+    val full_name: String?,
+    val phone: String?,
+    val national_id_mask: String?,
+    val expires_at: Long?,
+    val offline_days: Int?,
+    val device_model: String?,
+    val device_registered_at: Long?,
+    val server_time: Long?
+)
 
 interface ApiService {
     @POST("auth/login")
@@ -44,6 +54,9 @@ interface ApiService {
 
     @POST("license/refresh")
     suspend fun refreshLicense(): Response<LoginResponse>
+
+    @GET("me")
+    suspend fun getMe(): Response<MeResponse>
 
     @GET("playlists")
     suspend fun getPlaylists(): Response<List<Playlist>>
