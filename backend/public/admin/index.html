@@ -33,7 +33,7 @@ async function load(){
  const s=await api('stats');stats.innerHTML=`<div class=c>کل: ${s.total}</div><div class=c>فعال: ${s.active||0}</div><div class=c>منقضی: ${s.expired||0}</div><div class=c>۷ روز به انقضا: ${s.soon||0}</div>`;
  const us=await api(`users?q=${encodeURIComponent(q.value)}&status=${st.value}`);
  rows.innerHTML='';us.forEach(u=>{const tr=document.createElement('tr');
-  tr.innerHTML=`<td>${esc(u.full_name)}</td><td>${esc(u.phone)}</td><td>${esc(u.national_id_mask||'-')}</td><td>${D(u.expires_at)}${u.is_active?'':' (مسدود)'}</td><td>${esc(u.model||'-')}</td><td></td>`;
+  tr.innerHTML=`<td>${esc(u.full_name)}</td><td>${esc(u.phone)}</td><td>${esc(u.national_id_mask||'-')}</td><td>${D(u.expires_at)}${u.is_active?'':' (مسدود)'}</td><td>${esc(u.model||'-')}${u.last_seen?'<br><small>'+new Date(u.last_seen*1000).toLocaleString('fa-IR')+'</small>':''}</td><td></td>`;
   const a=tr.lastChild;
   [['+30',()=>act(u.id,'extend',{days:30})],['+90',()=>act(u.id,'extend',{days:90})],['کد ملی',async()=>alert((await api(`users/${u.id}/national-id`)).national_id)],
    ['ریست دستگاه',()=>act(u.id,'reset-device',{})],[u.is_active?'مسدود':'رفع مسدودی',()=>act(u.id,u.is_active?'ban':'unban',{})],

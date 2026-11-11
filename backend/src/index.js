@@ -38,7 +38,7 @@ async function authUser(req, env) {
 }
 
 async function makeSession(env, u, deviceId) {
-  const token = await jwtSign({ uid: u.id, did: deviceId, role: 'user' }, env.JWT_SECRET, 30 * 86400);
+  const token = await jwtSign({ uid: u.id, did: deviceId, role: 'user' }, env.JWT_SECRET, 365 * 86400); // ورود یک‌بار؛ اعتبار واقعی با expires_at و دستگاه در سرور چک می‌شود
   const exp = Math.min(u.expires_at, now() + u.offline_days * 86400);
   const license = await signLicense(env.LICENSE_PRIVATE_KEY, { uid: u.id, did: deviceId, iat: now(), exp, sub_exp: u.expires_at });
   return { token, license, server_time: now() };
@@ -54,9 +54,12 @@ async function login(req, env) {
   if (!u.is_active) return err('BANNED', 403);
   if (u.expires_at < now()) return err('EXPIRED', 403);
   const d = await env.DB.prepare('SELECT device_id FROM devices WHERE user_id=?').bind(u.id).first();
-  if (d && d.device_id !== b.device_id) return err('DEVICE_MISMATCH', 403);
   const session = await makeSession(env, u, b.device_id); // اول جلسه ساخته شود؛ اگر خطا داد دستگاه ثبت نشود
   if (!d) await env.DB.prepare('INSERT INTO devices VALUES (?,?,?,?,?)').bind(u.id, b.device_id, b.model || '', now(), now()).run();
+  else if (d.device_id !== b.device_id) { // دستگاه جدید جای قبلی را می‌گیرد؛ دستگاه قبلی در اولین درخواست DEVICE_MISMATCH می‌گیرد
+    await env.DB.prepare('UPDATE devices SET device_id=?, model=?, registered_at=?, last_seen=? WHERE user_id=?').bind(b.device_id, b.model || '', now(), now(), u.id).run();
+    await env.DB.prepare('UPDATE users SET device_resets=device_resets+1 WHERE id=?').bind(u.id).run();
+  } else await env.DB.prepare('UPDATE devices SET model=?, last_seen=? WHERE user_id=?').bind(b.model || d.model || '', now(), u.id).run();
   await clearAttempts(env, rk);
   return json(session);
 }
@@ -64,6 +67,13 @@ async function login(req, env) {
 async function licenseRefresh(req, env) {
   const a = await authUser(req, env); if (a.error) return a.error;
   return json(await makeSession(env, a.user, a.deviceId));
+}
+
+async function me(req, env) {
+  const a = await authUser(req, env); if (a.error) return a.error;
+  const d = await env.DB.prepare('SELECT model, registered_at, last_seen FROM devices WHERE user_id=?').bind(a.user.id).first();
+  const u = a.user;
+  return json({ full_name: u.full_name, phone: u.phone, national_id_mask: u.national_id_mask, expires_at: u.expires_at, offline_days: u.offline_days, device_model: d && d.model, device_registered_at: d && d.registered_at, server_time: now() });
 }
 
 async function listPlaylists(req, env) {
@@ -213,16 +223,17 @@ export default {
   async fetch(req, env) {
     const path = new URL(req.url).pathname, m = req.method;
     try {
-      if (path === '/auth/login' && m === 'POST') return login(req, env);
-      if (path === '/license/refresh' && m === 'POST') return licenseRefresh(req, env);
-      if (path === '/playlists' && m === 'GET') return listPlaylists(req, env);
+      if (path === '/auth/login' && m === 'POST') return await login(req, env);
+      if (path === '/license/refresh' && m === 'POST') return await licenseRefresh(req, env);
+      if (path === '/me' && m === 'GET') return await me(req, env);
+      if (path === '/playlists' && m === 'GET') return await listPlaylists(req, env);
       let x;
-      if ((x = path.match(/^\/playlists\/([^/]+)$/))) return getPlaylist(req, env, x[1]);
-      if ((x = path.match(/^\/videos\/([^/]+)\/source$/))) return videoSource(req, env, x[1]);
-      if ((x = path.match(/^\/videos\/([^/]+)\/key$/))) return videoKey(req, env, x[1]);
-      if (path === '/admin/api/setup' && m === 'POST') return adminSetup(req, env);
-      if (path === '/admin/api/login' && m === 'POST') return adminLogin(req, env);
-      if (path.startsWith('/admin/api/')) return adminRoute(req, env, path);
+      if ((x = path.match(/^\/playlists\/([^/]+)$/))) return await getPlaylist(req, env, x[1]);
+      if ((x = path.match(/^\/videos\/([^/]+)\/source$/))) return await videoSource(req, env, x[1]);
+      if ((x = path.match(/^\/videos\/([^/]+)\/key$/))) return await videoKey(req, env, x[1]);
+      if (path === '/admin/api/setup' && m === 'POST') return await adminSetup(req, env);
+      if (path === '/admin/api/login' && m === 'POST') return await adminLogin(req, env);
+      if (path.startsWith('/admin/api/')) return await adminRoute(req, env, path);
       return env.ASSETS.fetch(req);
     } catch (e) { console.error(e && e.stack || e); return json({ error: 'SERVER_ERROR', detail: String(e && e.message || e).slice(0, 200) }, 500); }
   },
