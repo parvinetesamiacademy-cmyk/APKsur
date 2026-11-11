@@ -29,21 +29,21 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector)
 fun MainAppScreen(onLogout: () -> Unit) {
     var selectedTab by remember { mutableStateOf("courses") }
     var openPlaylist by remember { mutableStateOf<Playlist?>(null) }
-    var openVideo by remember { mutableStateOf<VideoItem?>(null) }
+    var playing by remember { mutableStateOf<Pair<String, String>?>(null) }
 
     // دکمه‌ی بازگشت سیستم: پلیر ← لیست دروس ← دوره‌ها
-    BackHandler(enabled = openVideo != null) { openVideo = null }
-    BackHandler(enabled = openVideo == null && openPlaylist != null) { openPlaylist = null }
+    BackHandler(enabled = playing != null) { playing = null }
+    BackHandler(enabled = playing == null && openPlaylist != null) { openPlaylist = null }
 
-    if (openPlaylist != null && openVideo != null) {
-        PlayerScreen(onBack = { openVideo = null })
+    playing?.let { (id, title) ->
+        PlayerScreen(videoId = id, title = title, onBack = { playing = null }, onLogout = onLogout)
         return
     }
 
     openPlaylist?.let { playlist ->
         FolderDetailScreen(
             playlist = playlist,
-            onLessonClick = { openVideo = it },
+            onLessonClick = { playing = it.id to it.title },
             onBack = { openPlaylist = null },
             onLogout = onLogout
         )
@@ -79,8 +79,8 @@ fun MainAppScreen(onLogout: () -> Unit) {
                     onFolderClick = { openPlaylist = it },
                     onLogout = onLogout
                 )
-                "downloads" -> com.app.aparatdownloader.ui.common.DownloadsScreen()
-                "queue" -> ComingSoonScreen("صف دانلود")
+                "downloads" -> com.app.aparatdownloader.ui.common.DownloadsScreen(onPlay = { id, t -> playing = id to t })
+                "queue" -> com.app.aparatdownloader.ui.common.QueueScreen()
                 "profile" -> ProfileScreen(onLogout = onLogout)
             }
         }

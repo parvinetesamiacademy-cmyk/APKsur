@@ -18,6 +18,12 @@ import com.app.aparatdownloader.data.api.Playlist
 import com.app.aparatdownloader.data.api.PlaylistDetail
 import com.app.aparatdownloader.data.api.VideoItem
 import com.app.aparatdownloader.ui.common.*
+import android.widget.Toast
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.ui.platform.LocalContext
+import androidx.work.*
+import com.app.aparatdownloader.download.VideoDownloadWorker
+import java.io.File
 import com.app.aparatdownloader.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -29,6 +35,7 @@ fun FolderDetailScreen(
     onLogout: () -> Unit
 ) {
     val api = rememberApi()
+    val ctx = LocalContext.current
     var state by remember { mutableStateOf<LoadState<PlaylistDetail>>(LoadState.Loading) }
     var reloadKey by remember { mutableIntStateOf(0) }
 
@@ -76,7 +83,7 @@ fun FolderDetailScreen(
                             )
                         }
                         itemsIndexed(videos, key = { _, v -> v.id }) { index, video ->
-                            LessonRow(index + 1, video) { onLessonClick(video) }
+                            LessonRow(index + 1, video, onDownload = { startDownload(ctx, video) }) { onLessonClick(video) }
                         }
                         item { Spacer(Modifier.height(24.dp)) }
                     }
@@ -113,7 +120,7 @@ private fun SummaryCard(title: String, count: Int, size: String?) {
 }
 
 @Composable
-private fun LessonRow(number: Int, video: VideoItem, onClick: () -> Unit) {
+private fun LessonRow(number: Int, video: VideoItem, onDownload: () -> Unit, onClick: () -> Unit) {
     val meta = listOfNotNull(formatDuration(video.duration_sec), formatSize(video.size_bytes))
         .joinToString(" • ")
     Card(
@@ -139,7 +146,20 @@ private fun LessonRow(number: Int, video: VideoItem, onClick: () -> Unit) {
                     Text(meta, fontSize = 11.sp, color = TextSecondary)
                 }
             }
+            IconButton(onClick = onDownload) { Icon(Icons.Default.Download, contentDescription = "دانلود", tint = Primary) }
             Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Primary)
         }
     }
+}
+
+private fun startDownload(ctx: android.content.Context, video: VideoItem) {
+    if (File(File(ctx.filesDir, "videos"), "${video.id}.enc").exists()) {
+        Toast.makeText(ctx, "این ویدیو قبلاً دانلود شده است", Toast.LENGTH_SHORT).show(); return
+    }
+    val req = OneTimeWorkRequestBuilder<VideoDownloadWorker>()
+        .setInputData(workDataOf("video_id" to video.id, "title" to video.title))
+        .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+        .addTag("dl").addTag("title:${video.title}").build()
+    WorkManager.getInstance(ctx).enqueueUniqueWork("dl_${video.id}", ExistingWorkPolicy.REPLACE, req)
+    Toast.makeText(ctx, "به صف دانلود اضافه شد", Toast.LENGTH_SHORT).show()
 }

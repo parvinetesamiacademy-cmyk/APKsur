@@ -39,6 +39,12 @@ class KeyStoreManager(context: Context) {
         return sharedPreferences.getString("offline_license", null)
     }
 
+    fun saveVideoKey(id: String, key: String) {
+        sharedPreferences.edit().putString("vk_$id", key).apply()
+    }
+
+    fun getVideoKey(id: String): String? = sharedPreferences.getString("vk_$id", null)
+
     fun clearAll() {
         sharedPreferences.edit().clear().apply()
     }
