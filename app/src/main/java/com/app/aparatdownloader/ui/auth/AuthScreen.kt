@@ -1,5 +1,7 @@
 package com.app.aparatdownloader.ui.auth
 
+import android.os.Build
+import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,6 +28,7 @@ import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -37,10 +40,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -49,6 +54,9 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.app.aparatdownloader.data.api.ApiClient
+import com.app.aparatdownloader.data.api.LoginRequest
+import com.app.aparatdownloader.security.KeyStoreManager
 import com.app.aparatdownloader.ui.theme.Background
 import com.app.aparatdownloader.ui.theme.Danger
 import com.app.aparatdownloader.ui.theme.Primary
@@ -59,6 +67,10 @@ import com.app.aparatdownloader.ui.theme.SurfaceContainerBorder
 import com.app.aparatdownloader.ui.theme.TextMuted
 import com.app.aparatdownloader.ui.theme.TextPrimary
 import com.app.aparatdownloader.ui.theme.TextSecondary
+import com.google.gson.Gson
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 // TODO(DEBUG): این دو مقدار و شرط ورود دیباگ را بعد از اتمام تست حذف کنید
 private const val DEBUG_PHONE = "0912000"
@@ -73,24 +85,63 @@ private fun normalizeDigits(input: String): String =
         }
     }.joinToString("").trim()
 
+private fun messageFor(code: String?): String = when (code) {
+    "INVALID_CREDENTIALS" -> "شماره موبایل یا رمز عبور اشتباه است"
+    "BANNED" -> "حساب شما مسدود شده است"
+    "EXPIRED" -> "اعتبار حساب شما به پایان رسیده است"
+    "DEVICE_MISMATCH" -> "این حساب روی دستگاه دیگری فعال شده است"
+    "TOO_MANY_ATTEMPTS" -> "تلاش‌های ناموفق زیاد بود؛ ۱۵ دقیقه بعد دوباره امتحان کنید"
+    else -> "ورود انجام نشد؛ دوباره تلاش کنید"
+}
+
 @Composable
 fun AuthScreen(onLoginSuccess: () -> Unit) {
     var phone by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var isLoading by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
 
     fun submit() {
+        if (isLoading) return
         val p = normalizeDigits(phone)
         val pw = normalizeDigits(password)
         if (p.isEmpty() || pw.isEmpty()) {
             errorMessage = "شماره موبایل و رمز عبور را وارد کنید"
-        } else if (p == DEBUG_PHONE && pw == DEBUG_PASSWORD) {
-            // TODO(DEBUG): ورود دیباگ؛ بعداً با ApiClient.login جایگزین شود
+            return
+        }
+        // TODO(DEBUG): ورود دیباگ؛ بعد از تست حذف شود
+        if (p == DEBUG_PHONE && pw == DEBUG_PASSWORD) {
             errorMessage = null
             onLoginSuccess()
-        } else {
-            errorMessage = "شماره موبایل یا رمز عبور اشتباه است"
+            return
+        }
+        isLoading = true
+        errorMessage = null
+        scope.launch {
+            try {
+                val store = KeyStoreManager(context.applicationContext)
+                val api = ApiClient.create { store.getToken() }
+                val deviceId = Settings.Secure.getString(
+                    context.contentResolver, Settings.Secure.ANDROID_ID
+                ) ?: "unknown"
+                val res = api.login(LoginRequest(p, pw, deviceId, Build.MODEL))
+                val body = res.body()
+                if (res.isSuccessful && body != null) {
+                    store.saveToken(body.token)
+                    store.saveLicense(Gson().toJson(body.license))
+                    onLoginSuccess()
+                } else {
+                    val raw = withContext(Dispatchers.IO) { res.errorBody()?.string() }
+                    errorMessage = messageFor(ApiClient.errorCodeOf(raw))
+                }
+            } catch (e: Exception) {
+                errorMessage = "اتصال به سرور برقرار نشد؛ اینترنت را بررسی کنید"
+            } finally {
+                isLoading = false
+            }
         }
     }
 
@@ -229,9 +280,18 @@ fun AuthScreen(onLoginSuccess: () -> Unit) {
                             .fillMaxWidth()
                             .height(52.dp),
                         shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Primary)
+                        colors = ButtonDefaults.buttonColors(containerColor = Primary),
+                        enabled = !isLoading
                     ) {
-                        Text("ورود", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Surface)
+                        if (isLoading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(22.dp),
+                                color = Surface,
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Text("ورود", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Surface)
+                        }
                     }
                 }
             }
