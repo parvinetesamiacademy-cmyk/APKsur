@@ -14,6 +14,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.ui.PlayerView
 import com.app.aparatdownloader.data.api.resolveVideoUrl
@@ -50,7 +51,11 @@ fun PlayerScreen(videoId: String, title: String, onBack: () -> Unit, onLogout: (
         } else {
             when (val r = resolveVideoUrl(api, videoId)) {
                 is LoadState.Success -> {
-                    player.setMediaItem(MediaItem.fromUri(r.data))
+                    val http = DefaultHttpDataSource.Factory()
+                        .setUserAgent("Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36")
+                        .setAllowCrossProtocolRedirects(true)
+                        .setDefaultRequestProperties(mapOf("Referer" to "https://www.aparat.com/"))
+                    player.setMediaSource(ProgressiveMediaSource.Factory(http).createMediaSource(MediaItem.fromUri(r.data)))
                     player.prepare(); player.playWhenReady = true
                     state = LoadState.Success(Unit)
                 }

@@ -33,6 +33,12 @@ class VideoDownloadWorker(
             val store = KeyStoreManager(applicationContext)
             val api = ApiClient.create { store.getToken() }
 
+            // هر کاربر فقط یک بار اجازه دانلود هر ویدیو را دارد
+            when (val g = apiCall { api.downloadStart(id) }) {
+                is LoadState.Error -> return@withContext if (g.network && runAttemptCount < 2) Result.retry()
+                    else Result.failure(workDataOf("err" to g.message))
+                else -> {}
+            }
             val key = (apiCall { api.getVideoKey(id) } as? LoadState.Success)?.data?.key
                 ?: return@withContext Result.failure()
             val url = (resolveVideoUrl(api, id) as? LoadState.Success)?.data
@@ -40,6 +46,8 @@ class VideoDownloadWorker(
 
             val conn = URL(url).openConnection() as HttpURLConnection
             conn.connectTimeout = 20000; conn.readTimeout = 30000
+            conn.setRequestProperty("Referer", "https://www.aparat.com/")
+            if (conn.responseCode !in 200..299) throw java.io.IOException("HTTP ${conn.responseCode}")
             conn.setRequestProperty("User-Agent", "Mozilla/5.0")
             val total = conn.contentLengthLong
 
@@ -74,6 +82,7 @@ class VideoDownloadWorker(
             tmp.renameTo(out)
             File(dir, "$id.title").writeText(title)
             store.saveVideoKey(id, key)
+            for (i in 0 until 3) { if (apiCall { api.downloadDone(id) } is LoadState.Success) break }
             Result.success()
         } catch (e: Exception) {
             tmp.delete()

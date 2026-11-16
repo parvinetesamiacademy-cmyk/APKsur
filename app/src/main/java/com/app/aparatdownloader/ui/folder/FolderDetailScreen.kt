@@ -40,8 +40,7 @@ fun FolderDetailScreen(
     var reloadKey by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(reloadKey) {
-        state = LoadState.Loading
-        state = apiCall { api.getPlaylistVideos(playlist.id) }
+        loadWithCache<PlaylistDetail>(ctx, "videos_${playlist.id}", { state = it }) { api.getPlaylistVideos(playlist.id) }
     }
 
     Scaffold(

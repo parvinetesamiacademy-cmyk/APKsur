@@ -17,12 +17,21 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalContext
+import com.app.aparatdownloader.data.api.AparatResolver
 import com.app.aparatdownloader.data.api.Playlist
 import com.app.aparatdownloader.ui.common.toFa
 import com.app.aparatdownloader.ui.theme.*
 
 @Composable
 fun CourseCard(playlist: Playlist, onClick: () -> Unit) {
+    val ctx = LocalContext.current
+    var poster by remember(playlist.id) { mutableStateOf<String?>(null) }
+    LaunchedEffect(playlist.first_hash) {
+        playlist.first_hash?.takeIf { it.isNotBlank() }?.let { poster = AparatResolver.poster(ctx, it) }
+    }
+    val cover = poster ?: playlist.cover_url
     Card(
         onClick = onClick,
         modifier = Modifier
@@ -47,9 +56,9 @@ fun CourseCard(playlist: Playlist, onClick: () -> Unit) {
                     tint = Surface.copy(alpha = 0.6f),
                     modifier = Modifier.size(48.dp)
                 )
-                if (!playlist.cover_url.isNullOrBlank()) {
+                if (!cover.isNullOrBlank()) {
                     AsyncImage(
-                        model = playlist.cover_url,
+                        model = cover,
                         contentDescription = playlist.title,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.matchParentSize()

@@ -20,12 +20,12 @@ import com.app.aparatdownloader.ui.theme.*
 @Composable
 fun PlaylistScreen(onFolderClick: (Playlist) -> Unit, onLogout: () -> Unit) {
     val api = rememberApi()
+    val ctx = androidx.compose.ui.platform.LocalContext.current
     var state by remember { mutableStateOf<LoadState<List<Playlist>>>(LoadState.Loading) }
     var reloadKey by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(reloadKey) {
-        state = LoadState.Loading
-        state = apiCall { api.getPlaylists() }
+        loadWithCache<List<Playlist>>(ctx, "playlists", { state = it }) { api.getPlaylists() }
     }
 
     Scaffold(

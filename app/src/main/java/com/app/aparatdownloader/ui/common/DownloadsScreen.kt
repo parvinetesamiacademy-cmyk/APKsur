@@ -84,7 +84,7 @@ fun QueueScreen() {
                                 LinearProgressIndicator(progress = { pct / 100f }, modifier = Modifier.fillMaxWidth(), color = Primary)
                                 Text("$pct%".toFa(), color = TextSecondary)
                             }
-                            WorkInfo.State.FAILED -> Text("ناموفق", color = Danger)
+                            WorkInfo.State.FAILED -> Text(w.outputData.getString("err") ?: "ناموفق", color = Danger)
                             else -> Text("در انتظار...", color = TextSecondary)
                         }
                     }

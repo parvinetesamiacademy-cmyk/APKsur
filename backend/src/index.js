@@ -39,7 +39,7 @@ async function authUser(req, env) {
 
 async function makeSession(env, u, deviceId) {
   const token = await jwtSign({ uid: u.id, did: deviceId, role: 'user' }, env.JWT_SECRET, 365 * 86400); // ورود یک‌بار؛ اعتبار واقعی با expires_at و دستگاه در سرور چک می‌شود
-  const exp = Math.min(u.expires_at, now() + u.offline_days * 86400);
+  const exp = u.expires_at; // اعتبار آفلاین = مدت اشتراک (۳۰ روزه ۳۰ روز، ۹۰ روزه ۹۰ روز)
   const license = await signLicense(env.LICENSE_PRIVATE_KEY, { uid: u.id, did: deviceId, iat: now(), exp, sub_exp: u.expires_at });
   return { token, license, server_time: now() };
 }
@@ -78,23 +78,41 @@ async function me(req, env) {
 
 async function listPlaylists(req, env) {
   const a = await authUser(req, env); if (a.error) return a.error;
-  const { results } = await env.DB.prepare('SELECT p.*, (SELECT COUNT(*) FROM videos v WHERE v.playlist_id=p.id) AS video_count FROM playlists p ORDER BY sort_order').all();
+  const { results } = await env.DB.prepare('SELECT p.*, (SELECT COUNT(*) FROM videos v WHERE v.playlist_id=p.id) AS video_count, (SELECT v.aparat_hash FROM videos v WHERE v.playlist_id=p.id ORDER BY v.position, v.rowid LIMIT 1) AS first_hash FROM playlists p ORDER BY sort_order').all();
   return json(results);
 }
 async function getPlaylist(req, env, id) {
   const a = await authUser(req, env); if (a.error) return a.error;
-  const { results } = await env.DB.prepare('SELECT id,title,position,duration_sec,size_bytes,version,source_type FROM videos WHERE playlist_id=? ORDER BY position').bind(id).all();
+  const { results } = await env.DB.prepare('SELECT id,title,position,duration_sec,size_bytes,version,source_type FROM videos WHERE playlist_id=? ORDER BY position, rowid').bind(id).all();
   return json({ id, videos: results });
 }
 async function videoSource(req, env, id) {
   const a = await authUser(req, env); if (a.error) return a.error;
   const v = await env.DB.prepare('SELECT source_url, source_type, aparat_hash, version FROM videos WHERE id=?').bind(id).first();
-  if (!v || !v.source_url) return err('NOT_FOUND', 404);
-  return json({ url: v.source_url, type: v.source_type, aparat_hash: v.aparat_hash, version: v.version });
+  if (!v || (!v.source_url && !v.aparat_hash)) return err('NOT_FOUND', 404);
+  return json({ url: v.source_url || '', type: v.source_type, aparat_hash: v.aparat_hash, version: v.version });
 }
 async function videoKey(req, env, id) {
   const a = await authUser(req, env); if (a.error) return a.error;
   return json({ key: await deriveVideoKey(env.MASTER_KEY, a.user.id, a.deviceId, id) });
+}
+
+async function dlTable(env) {
+  await env.DB.prepare('CREATE TABLE IF NOT EXISTS downloads (user_id TEXT, video_id TEXT, status TEXT, updated INTEGER, PRIMARY KEY(user_id, video_id))').run();
+}
+async function downloadStart(req, env, id) {
+  const a = await authUser(req, env); if (a.error) return a.error;
+  await dlTable(env);
+  const r = await env.DB.prepare('SELECT status FROM downloads WHERE user_id=? AND video_id=?').bind(a.user.id, id).first();
+  if (r && r.status === 'done') return err('ALREADY_DOWNLOADED', 403);
+  await env.DB.prepare('INSERT OR REPLACE INTO downloads VALUES (?,?,?,?)').bind(a.user.id, id, 'started', now()).run();
+  return json({ ok: true });
+}
+async function downloadDone(req, env, id) {
+  const a = await authUser(req, env); if (a.error) return a.error;
+  await dlTable(env);
+  await env.DB.prepare('INSERT OR REPLACE INTO downloads VALUES (?,?,?,?)').bind(a.user.id, id, 'done', now()).run();
+  return json({ ok: true });
 }
 
 // ---------- ادمین ----------
@@ -154,7 +172,7 @@ async function adminRoute(req, env, path) {
       await env.DB.prepare('INSERT INTO users (id,full_name,phone,password_hash,salt,national_id_enc,national_id_hash,national_id_mask,expires_at,offline_days,note,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
         .bind(id, b.full_name || '', b.phone, await hashPassword(b.password, salt), salt,
           nid ? await aesEncrypt(env.NID_KEY, nid) : null, nid ? await hmac(env.NID_KEY, nid) : null,
-          nid ? nid.slice(0, 3) + '****' + nid.slice(-3) : null, now() + b.days * 86400, b.offline_days || 14, b.note || '', now()).run();
+          nid ? nid.slice(0, 3) + '****' + nid.slice(-3) : null, now() + b.days * 86400, b.offline_days || b.days, b.note || '', now()).run();
     } catch { return err('DUPLICATE_PHONE_OR_NID', 409); }
     await audit(env, req, aid, 'create_user', id);
     return json({ id });
@@ -198,12 +216,14 @@ async function adminRoute(req, env, path) {
     await audit(env, req, aid, 'save_playlist', id); return json({ id });
   }
   if (path === '/admin/api/videos') {
-    if (m === 'GET') return json((await env.DB.prepare('SELECT * FROM videos WHERE playlist_id=? ORDER BY position').bind(url.searchParams.get('playlist_id')).all()).results);
+    if (m === 'GET') return json((await env.DB.prepare('SELECT * FROM videos WHERE playlist_id=? ORDER BY position, rowid').bind(url.searchParams.get('playlist_id')).all()).results);
     const b = await body(req); const id = b.id || randId(8);
     const hash = aparatHash(b.aparat_url || b.aparat_hash);
     if (!b.playlist_id || !b.title || !hash) return err('BAD_REQUEST');
+    let pos = +b.position;
+    if (!pos) { const mx = await env.DB.prepare('SELECT COALESCE(MAX(position),0) m FROM videos WHERE playlist_id=?').bind(b.playlist_id).first(); pos = (mx.m || 0) + 1; }
     await env.DB.prepare('INSERT OR REPLACE INTO videos (id,playlist_id,title,position,duration_sec,aparat_hash,source_url,source_type,version) VALUES (?,?,?,?,?,?,?,?,?)')
-      .bind(id, b.playlist_id, b.title, b.position || 0, b.duration_sec || null, hash, b.source_url || null, b.source_type || 'mp4', b.version || 1).run();
+      .bind(id, b.playlist_id, b.title, pos, b.duration_sec || null, hash, b.source_url || null, b.source_type || 'mp4', b.version || 1).run();
     await audit(env, req, aid, 'save_video', id); return json({ id, aparat_hash: hash });
   }
   if ((mm = path.match(/^\/admin\/api\/(videos|playlists)\/([^/]+)\/delete$/)) && m === 'POST') {
@@ -231,6 +251,7 @@ export default {
       if ((x = path.match(/^\/playlists\/([^/]+)$/))) return await getPlaylist(req, env, x[1]);
       if ((x = path.match(/^\/videos\/([^/]+)\/source$/))) return await videoSource(req, env, x[1]);
       if ((x = path.match(/^\/videos\/([^/]+)\/key$/))) return await videoKey(req, env, x[1]);
+      if ((x = path.match(/^\/videos\/([^/]+)\/download\/(start|done)$/)) && m === 'POST') return x[2] === 'start' ? await downloadStart(req, env, x[1]) : await downloadDone(req, env, x[1]);
       if (path === '/admin/api/setup' && m === 'POST') return await adminSetup(req, env);
       if (path === '/admin/api/login' && m === 'POST') return await adminLogin(req, env);
       if (path.startsWith('/admin/api/')) return await adminRoute(req, env, path);

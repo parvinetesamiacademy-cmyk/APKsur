@@ -31,8 +31,7 @@ fun ProfileScreen(onLogout: () -> Unit) {
     var reloadKey by remember { mutableIntStateOf(0) }
     var usedBytes by remember { mutableLongStateOf(0L) }
     LaunchedEffect(reloadKey) {
-        state = LoadState.Loading
-        state = apiCall { api.getMe() }
+        loadWithCache<MeResponse>(ctx, "me", { state = it }) { api.getMe() }
         usedBytes = File(ctx.filesDir, "videos").listFiles()?.sumOf { it.length() } ?: 0L
     }
     when (val st = state) {
@@ -41,9 +40,9 @@ fun ProfileScreen(onLogout: () -> Unit) {
         is LoadState.Success -> {}
     }
     val me = (state as LoadState.Success).data
-    val nowSec = me.server_time ?: (System.currentTimeMillis() / 1000)
+    val nowSec = System.currentTimeMillis() / 1000
     val daysLeft = (((me.expires_at ?: nowSec) - nowSec) / 86400).coerceAtLeast(0)
-    val offlineDays = minOf(me.offline_days ?: 0, daysLeft.toInt())
+    val offlineDays = daysLeft.toInt() // اعتبار آفلاین = مدت اعتبار اشتراک
     Scaffold(
         topBar = {
             TopAppBar(
@@ -127,9 +126,9 @@ fun ProfileScreen(onLogout: () -> Unit) {
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text("اعتبار بدون نیاز به اینترنت", fontSize = 12.sp, color = TextSecondary)
-                                Text("می‌توانید تا $offlineDays روز دیگر ویدیوهای رمزشده را آفلاین ببینید.".toFa(), fontSize = 11.sp, color = TextMuted)
+                                Text("مدت اعتبار شما: $offlineDays روز دیگر؛ تا آن زمان ویدیوها را بدون رمز می‌توانید ببینید.".toFa(), fontSize = 11.sp, color = TextMuted)
                                 Spacer(modifier = Modifier.height(6.dp))
-                                Text("• اشتراک: $daysLeft روز باقی‌مانده".toFa(), fontSize = 10.sp, color = Primary)
+                                Text("• اعتبار باقی‌مانده: $daysLeft روز".toFa(), fontSize = 10.sp, color = Primary)
                             }
                             // Circular Days badge mock
                             Surface(

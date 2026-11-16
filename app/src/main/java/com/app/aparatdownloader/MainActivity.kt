@@ -41,6 +41,7 @@ class MainActivity : ComponentActivity() {
                     if (isLoggedIn) {
                         MainAppScreen(onLogout = {
                             keyStoreManager.clearAll()
+                            java.io.File(filesDir, "cache").deleteRecursively()
                             isLoggedIn = false
                         })
                     } else {

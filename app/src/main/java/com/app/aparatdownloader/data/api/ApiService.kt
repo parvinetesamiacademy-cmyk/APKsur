@@ -21,7 +21,8 @@ data class Playlist(
     val title: String,
     val cover_url: String?,
     val sort_order: Int?,
-    val video_count: Int?
+    val video_count: Int?,
+    val first_hash: String? = null
 )
 
 data class VideoItem(
@@ -66,6 +67,12 @@ interface ApiService {
 
     @GET("videos/{id}/source")
     suspend fun getVideoSource(@Path("id") id: String): Response<VideoSource>
+
+    @POST("videos/{id}/download/start")
+    suspend fun downloadStart(@Path("id") id: String): Response<okhttp3.ResponseBody>
+
+    @POST("videos/{id}/download/done")
+    suspend fun downloadDone(@Path("id") id: String): Response<okhttp3.ResponseBody>
 
     @GET("videos/{id}/key")
     suspend fun getVideoKey(@Path("id") id: String): Response<VideoKey>

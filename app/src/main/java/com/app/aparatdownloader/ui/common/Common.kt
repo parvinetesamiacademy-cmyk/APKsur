@@ -30,7 +30,7 @@ import kotlin.math.roundToInt
 sealed interface LoadState<out T> {
     object Loading : LoadState<Nothing>
     data class Success<T>(val data: T) : LoadState<T>
-    data class Error(val message: String, val unauthorized: Boolean = false) : LoadState<Nothing>
+    data class Error(val message: String, val unauthorized: Boolean = false, val network: Boolean = false) : LoadState<Nothing>
 }
 
 private fun messageFor(code: String?): String = when (code) {
@@ -38,6 +38,7 @@ private fun messageFor(code: String?): String = when (code) {
     "EXPIRED" -> "اعتبار حساب شما به پایان رسیده است"
     "DEVICE_MISMATCH" -> "این حساب روی دستگاه دیگری فعال شده است"
     "NOT_FOUND" -> "مورد درخواستی پیدا نشد"
+    "ALREADY_DOWNLOADED" -> "این ویدیو قبلاً یک‌بار دانلود شده و دوباره قابل دانلود نیست"
     else -> "دریافت اطلاعات انجام نشد؛ دوباره تلاش کنید"
 }
 
@@ -52,13 +53,42 @@ suspend fun <T> apiCall(block: suspend () -> Response<T>): LoadState<T> =
             LoadState.Error("نشست شما معتبر نیست؛ دوباره وارد شوید", unauthorized = true)
         } else {
             val raw = withContext(Dispatchers.IO) { res.errorBody()?.string() }
-            LoadState.Error(messageFor(ApiClient.errorCodeOf(raw)))
+            LoadState.Error(messageFor(ApiClient.errorCodeOf(raw)), network = res.code() >= 500)
         }
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
-        LoadState.Error("اتصال به سرور برقرار نشد؛ اینترنت خود را بررسی کنید")
+        LoadState.Error("اتصال به سرور برقرار نشد؛ اینترنت خود را بررسی کنید", network = true)
     }
+
+// ───────── کش آخرین وضعیت ─────────
+
+fun cacheDir(ctx: android.content.Context) = java.io.File(ctx.filesDir, "cache").apply { mkdirs() }
+
+inline fun <reified T> readCache(ctx: android.content.Context, key: String): T? = try {
+    val f = java.io.File(cacheDir(ctx), "$key.json")
+    if (f.exists()) com.google.gson.Gson().fromJson<T>(f.readText(), object : com.google.gson.reflect.TypeToken<T>() {}.type) else null
+} catch (e: Exception) { null }
+
+fun writeCache(ctx: android.content.Context, key: String, obj: Any) {
+    try { java.io.File(cacheDir(ctx), "$key.json").writeText(com.google.gson.Gson().toJson(obj)) } catch (_: Exception) {}
+}
+
+/** اول آخرین اطلاعات ذخیره‌شده را نشان می‌دهد، بعد از اینترنت تازه می‌کند؛ با قطعی اینترنت خطا نمی‌دهد */
+suspend inline fun <reified T : Any> loadWithCache(
+    ctx: android.content.Context,
+    key: String,
+    crossinline onState: (LoadState<T>) -> Unit,
+    crossinline call: suspend () -> Response<T>
+) {
+    val cached = withContext(Dispatchers.IO) { readCache<T>(ctx, key) }
+    onState(if (cached != null) LoadState.Success(cached) else LoadState.Loading)
+    when (val r = apiCall { call() }) {
+        is LoadState.Success -> { withContext(Dispatchers.IO) { writeCache(ctx, key, r.data) }; onState(r) }
+        is LoadState.Error -> if (cached == null || !r.network) onState(r)
+        else -> {}
+    }
+}
 
 @Composable
 fun rememberApi(): ApiService {
