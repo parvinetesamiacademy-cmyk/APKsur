@@ -20,7 +20,7 @@ import com.app.aparatdownloader.ui.theme.*
 
 sealed class Screen(val route: String, val title: String, val icon: ImageVector) {
     object Courses : Screen("courses", "دوره‌ها", Icons.Default.VideoLibrary)
-    object Downloads : Screen("downloads", "دانلودها", Icons.Default.Download)
+    object Downloads : Screen("downloads", "دوره‌های دانلودشده", Icons.Default.Download)
     object Queue : Screen("queue", "صف دانلود", Icons.Default.HourglassEmpty)
     object Profile : Screen("profile", "پروفایل", Icons.Default.Person)
 }

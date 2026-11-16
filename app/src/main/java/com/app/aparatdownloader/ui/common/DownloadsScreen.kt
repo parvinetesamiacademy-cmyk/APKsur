@@ -32,7 +32,7 @@ fun DownloadsScreen(onPlay: (String, String) -> Unit) {
     fun titleOf(f: File) = File(f.parentFile, f.nameWithoutExtension + ".title")
         .takeIf { it.exists() }?.readText() ?: f.nameWithoutExtension
     Scaffold(
-        topBar = { TopAppBar(title = { Text("دانلودها", color = TextPrimary) }, colors = TopAppBarDefaults.topAppBarColors(containerColor = Surface)) },
+        topBar = { TopAppBar(title = { Text("دوره‌های دانلودشده", color = TextPrimary) }, colors = TopAppBarDefaults.topAppBarColors(containerColor = Surface)) },
         containerColor = Background
     ) { pad ->
         if (files.isEmpty()) {
@@ -40,19 +40,41 @@ fun DownloadsScreen(onPlay: (String, String) -> Unit) {
                 Text("هنوز ویدیویی دانلود نشده است", color = TextSecondary)
             }
         } else LazyColumn(Modifier.padding(pad).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(files, key = { it.name }) { f ->
+            val dir0 = File(ctx.filesDir, "videos")
+            val groups = files.groupBy { courseInfo(dir0, it.nameWithoutExtension).second }
+            items(groups.keys.toList(), key = { it }) { cname ->
+                CourseBox(cname) {
+                    groups[cname]!!.sortedBy { courseInfo(dir0, it.nameWithoutExtension).first }.forEach { f ->
                 Card(onClick = { onPlay(f.nameWithoutExtension, titleOf(f)) }, colors = CardDefaults.cardColors(containerColor = Surface)) {
-                    Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text(titleOf(f), color = TextPrimary, maxLines = 1)
-                            Text(formatSize(f.length()) ?: "", color = TextSecondary)
+                            Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(titleOf(f), color = TextPrimary, maxLines = 1)
+                                    Text(formatSize(f.length()) ?: "", color = TextSecondary)
+                                }
+                                IconButton(onClick = {
+                                    f.delete(); File(f.parentFile, f.nameWithoutExtension + ".title").delete(); load()
+                                }) { Icon(Icons.Default.Delete, "حذف", tint = Danger) }
+                            }
                         }
-                        IconButton(onClick = {
-                            f.delete(); File(f.parentFile, f.nameWithoutExtension + ".title").delete(); load()
-                        }) { Icon(Icons.Default.Delete, "حذف", tint = Danger) }
-                    }
+                            }
                 }
             }
+        }
+    }
+}
+
+
+private fun courseInfo(dir: File, id: String): Pair<Int, String> {
+    val l = File(dir, "$id.course").takeIf { it.exists() }?.readLines() ?: return 0 to "سایر"
+    return (l.getOrNull(0)?.toIntOrNull() ?: 0) to (l.getOrNull(1) ?: "سایر")
+}
+
+@Composable
+private fun CourseBox(name: String, content: @Composable ColumnScope.() -> Unit) {
+    Card(colors = CardDefaults.cardColors(containerColor = Background), border = androidx.compose.foundation.BorderStroke(1.dp, Primary)) {
+        Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(name, color = Primary, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+            content()
         }
     }
 }
@@ -108,35 +130,41 @@ fun QueueScreen() {
                 }
                 Spacer(Modifier.height(8.dp))
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(active, key = { it.id }) { w ->
-                        val id = vidOf(w)
-                        val running = w.state == WorkInfo.State.RUNNING
-                        val done = w.progress.getLong("done", doneOf(id))
-                        val total = w.progress.getLong("total", 0L)
-                        val pct = w.progress.getInt("p", 0)
-                        val speed = w.progress.getLong("speed", 0L)
+                    val entries = active.map { Triple(vidOf(it), it, true) } + paused.map { Triple(it, null as WorkInfo?, false) }
+                    val qg = entries.groupBy { courseInfo(dir, it.first).second }
+                    items(qg.keys.toList(), key = { it }) { cname ->
+                        CourseBox(cname) {
+                            qg[cname]!!.sortedBy { courseInfo(dir, it.first).first }.forEach { (id, w, isAct) ->
+                                if (isAct && w != null) {
+                                                                        val running = w.state == WorkInfo.State.RUNNING
+                                                val done = w.progress.getLong("done", doneOf(id))
+                                                val total = w.progress.getLong("total", 0L)
+                                                val pct = w.progress.getInt("p", 0)
+                                                val speed = w.progress.getLong("speed", 0L)
+                                                QueueCard(
+                                                    title = titleOf(id), progress = if (total > 0) pct / 100f else null,
+                                                    status = when {
+                                                        w.state == WorkInfo.State.FAILED -> w.outputData.getString("err") ?: "ناموفق"
+                                                        running && total > 0 -> "$pct% • ${formatSize(done)} از ${formatSize(total)} • ${fmtSpeed(speed)}".toFa()
+                                                        running -> "در انتظار نوبت..."
+                                                        !online -> "منتظر اتصال اینترنت"
+                                                        else -> "در انتظار / تلاش مجدد..."
+                                                    },
+                                                    failed = w.state == WorkInfo.State.FAILED,
+                                                    onPauseResume = { if (w.state == WorkInfo.State.FAILED) enqueueDownload(ctx, id, titleOf(id)) else pauseDownload(ctx, id) },
+                                                    pauseLabel = if (w.state == WorkInfo.State.FAILED) "تلاش مجدد" else "توقف",
+                                                    onCancel = { cancelDownload(ctx, id) }
+                                                )
+                                                        } else {
                         QueueCard(
-                            title = titleOf(id), progress = if (total > 0) pct / 100f else null,
-                            status = when {
-                                w.state == WorkInfo.State.FAILED -> w.outputData.getString("err") ?: "ناموفق"
-                                running && total > 0 -> "$pct% • ${formatSize(done)} از ${formatSize(total)} • ${fmtSpeed(speed)}".toFa()
-                                running -> "در انتظار نوبت..."
-                                !online -> "منتظر اتصال اینترنت"
-                                else -> "در انتظار / تلاش مجدد..."
-                            },
-                            failed = w.state == WorkInfo.State.FAILED,
-                            onPauseResume = { if (w.state == WorkInfo.State.FAILED) enqueueDownload(ctx, id, titleOf(id)) else pauseDownload(ctx, id) },
-                            pauseLabel = if (w.state == WorkInfo.State.FAILED) "تلاش مجدد" else "توقف",
-                            onCancel = { cancelDownload(ctx, id) }
-                        )
-                    }
-                    items(paused, key = { "p_$it" }) { id ->
-                        QueueCard(
-                            title = titleOf(id), progress = null,
-                            status = "متوقف‌شده • ${formatSize(doneOf(id))} دریافت شده".toFa(), failed = false,
-                            onPauseResume = { enqueueDownload(ctx, id, titleOf(id)) }, pauseLabel = "ادامه",
-                            onCancel = { cancelDownload(ctx, id) }
-                        )
+                                                    title = titleOf(id), progress = null,
+                                                    status = "متوقف‌شده • ${formatSize(doneOf(id))} دریافت شده".toFa(), failed = false,
+                                                    onPauseResume = { enqueueDownload(ctx, id, titleOf(id)) }, pauseLabel = "ادامه",
+                                                    onCancel = { cancelDownload(ctx, id) }
+                                                )
+                                                        }
+                            }
+                        }
                     }
                 }
             }

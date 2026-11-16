@@ -75,7 +75,7 @@ fun FolderDetailScreen(
                         item {
                             Button(
                                 onClick = {
-                                    val n = videos.count { startDownload(ctx, it, silent = true) }
+                                    val n = videos.count { startDownload(ctx, it, playlist.title, it.position, silent = true) }
                                     Toast.makeText(ctx, if (n > 0) "$n ویدیو به صف دانلود اضافه شد".toFa() else "همه ویدیوها قبلاً دانلود شده‌اند", Toast.LENGTH_SHORT).show()
                                 },
                                 modifier = Modifier.fillMaxWidth(),
@@ -96,7 +96,7 @@ fun FolderDetailScreen(
                             )
                         }
                         itemsIndexed(videos, key = { _, v -> v.id }) { index, video ->
-                            LessonRow(index + 1, video, onDownload = { startDownload(ctx, video) }) { onLessonClick(video) }
+                            LessonRow(index + 1, video, onDownload = { startDownload(ctx, video, playlist.title, video.position) }) { onLessonClick(video) }
                         }
                         item { Spacer(Modifier.height(24.dp)) }
                     }
@@ -170,13 +170,13 @@ private fun LessonRow(number: Int, video: VideoItem, onDownload: () -> Unit, onC
 }
 
 /** true = به صف اضافه شد */
-private fun startDownload(ctx: android.content.Context, video: VideoItem, silent: Boolean = false): Boolean {
+private fun startDownload(ctx: android.content.Context, video: VideoItem, course: String, idx: Int, silent: Boolean = false): Boolean {
     val dir = File(ctx.filesDir, "videos")
     if (File(dir, "${video.id}.enc").exists()) {
         if (!silent) Toast.makeText(ctx, "این ویدیو قبلاً دانلود شده است", Toast.LENGTH_SHORT).show()
         return false
     }
-    com.app.aparatdownloader.download.enqueueDownload(ctx, video.id, video.title)
+    com.app.aparatdownloader.download.enqueueDownload(ctx, video.id, video.title, course, idx)
     if (!silent) Toast.makeText(ctx, "به صف دانلود اضافه شد", Toast.LENGTH_SHORT).show()
     return true
 }

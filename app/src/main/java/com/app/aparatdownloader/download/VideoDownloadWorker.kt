@@ -30,7 +30,9 @@ import kotlinx.coroutines.sync.withPermit
 import java.io.RandomAccessFile
 
 
-fun enqueueDownload(ctx: Context, id: String, title: String) {
+fun enqueueDownload(ctx: Context, id: String, title: String, course: String? = null, idx: Int = 0) {
+    val vd = File(ctx.filesDir, "videos").apply { mkdirs() }
+    if (course != null) File(vd, "$id.course").writeText("$idx\n$course")
     val req = OneTimeWorkRequestBuilder<VideoDownloadWorker>()
         .setInputData(workDataOf("video_id" to id, "title" to title))
         .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
@@ -46,7 +48,7 @@ fun cancelDownload(ctx: Context, id: String) {
     WorkManager.getInstance(ctx).cancelUniqueWork("dl_$id")
     val dir = File(ctx.filesDir, "videos")
     File(dir, "$id.part").delete()
-    if (!File(dir, "$id.enc").exists()) File(dir, "$id.title").delete()
+    if (!File(dir, "$id.enc").exists()) { File(dir, "$id.title").delete(); File(dir, "$id.course").delete() }
 }
 
 class VideoDownloadWorker(
@@ -54,7 +56,7 @@ class VideoDownloadWorker(
     workerParams: WorkerParameters
 ) : CoroutineWorker(appContext, workerParams) {
 
-    companion object { private val gate = Semaphore(2) }
+    companion object { private val gate = Semaphore(1) }
 
     private fun fgInfo(title: String, pct: Int): ForegroundInfo {
         val nm = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
