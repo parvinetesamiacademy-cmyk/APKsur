@@ -78,7 +78,14 @@ async function me(req, env) {
 
 async function listPlaylists(req, env) {
   const a = await authUser(req, env); if (a.error) return a.error;
-  const { results } = await env.DB.prepare('SELECT p.*, (SELECT COUNT(*) FROM videos v WHERE v.playlist_id=p.id) AS video_count, (SELECT v.aparat_hash FROM videos v WHERE v.playlist_id=p.id ORDER BY v.position, v.rowid LIMIT 1) AS first_hash FROM playlists p ORDER BY sort_order').all();
+  const { results } = await env.DB.prepare('SELECT p.*, (SELECT COUNT(*) FROM videos v WHERE v.playlist_id=p.id) AS video_count, (SELECT v.aparat_hash FROM videos v WHERE v.playlist_id=p.id ORDER BY v.position, v.rowid LIMIT 1) AS first_hash, (SELECT v.source_url FROM videos v WHERE v.playlist_id=p.id ORDER BY v.position, v.rowid LIMIT 1) AS first_src FROM playlists p ORDER BY sort_order').all();
+  // اگر کاور خالی بود و ویدئوی اول از archive.org است، کاور خودکار آرشیو استفاده می‌شود
+  for (const p of results) {
+    if (!p.cover_url && p.first_src) {
+      const m = String(p.first_src).match(/archive\.org\/(?:details|download|embed)\/([^/?#]+)/);
+      if (m) p.cover_url = 'https://archive.org/services/img/' + m[1];
+    }
+  }
   return json(results);
 }
 async function getPlaylist(req, env, id) {

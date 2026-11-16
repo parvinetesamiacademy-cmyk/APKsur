@@ -63,7 +63,12 @@ fun FolderDetailScreen(
                 is LoadState.Error -> ErrorState(s, onRetry = { reloadKey++ }, onLogout = onLogout)
                 is LoadState.Success -> {
                     val videos = s.data.videos.sortedBy { it.position }
-                    val totalBytes = videos.sumOf { it.size_bytes ?: 0L }
+                    val dir = File(ctx.filesDir, "videos")
+                    // حجم واقعیِ فایل‌های دانلودشده روی دستگاه؛ اگر دانلود نشده از حجم سرور استفاده می‌شود
+                    val totalBytes = videos.sumOf { v ->
+                        val local = File(dir, "${v.id}.enc").takeIf { it.exists() }?.length()
+                        local ?: (v.size_bytes ?: 0L)
+                    }
                     LazyColumn(
                         modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -76,7 +81,7 @@ fun FolderDetailScreen(
                             Button(
                                 onClick = {
                                     val n = videos.count { startDownload(ctx, it, playlist.title, it.position, silent = true) }
-                                    Toast.makeText(ctx, if (n > 0) "$n ویدیو به صف دانلود اضافه شد".toFa() else "همه ویدیوها قبلاً دانلود شده‌اند", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(ctx, "$n ویدیو به صف دانلود اضافه شد".toFa(), Toast.LENGTH_SHORT).show()
                                 },
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(14.dp)
@@ -172,15 +177,10 @@ private fun LessonRow(number: Int, video: VideoItem, onDownload: () -> Unit, onC
 /** true = به صف اضافه شد */
 private fun startDownload(ctx: android.content.Context, video: VideoItem, course: String, idx: Int, silent: Boolean = false): Boolean {
     val dir = File(ctx.filesDir, "videos").apply { mkdirs() }
-    if (File(dir, "${video.id}.enc").exists()) {
-        if (!silent) Toast.makeText(ctx, "این ویدیو قبلاً دانلود شده است", Toast.LENGTH_SHORT).show()
-        return false
-    }
-    if (com.app.aparatdownloader.download.DownloadLimit.isUsed(ctx, video.id)) {
-        if (!silent) Toast.makeText(ctx, "این ویدیو قبلاً یک‌بار دانلود شده و دوباره قابل دانلود نیست", Toast.LENGTH_LONG).show()
-        return false
-    }
+    // محدودیت دانلود تکراری برداشته شد: اگر قبلاً دانلود شده بود، فایل قدیمی پاک و دوباره دانلود می‌شود
     try {
+        File(dir, "${video.id}.enc").delete()
+        File(dir, "${video.id}.part").delete()
         File(dir, "${video.id}.dur").writeText((video.duration_sec ?: 0).toString())
         com.app.aparatdownloader.download.enqueueDownload(ctx, video.id, video.title, course, idx)
     } catch (e: Exception) {

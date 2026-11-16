@@ -152,7 +152,6 @@ class VideoDownloadWorker(
         out.delete()
         part.renameTo(out)
         store.saveVideoKey(vid, key)
-        DownloadLimit.markUsed(applicationContext, vid)
         for (i in 0 until 3) { if (apiCall { api.downloadDone(vid) } is LoadState.Success) break }
         return Result.success()
     }
