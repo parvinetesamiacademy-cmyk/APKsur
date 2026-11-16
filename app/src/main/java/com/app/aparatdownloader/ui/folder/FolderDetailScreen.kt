@@ -171,7 +171,7 @@ private fun LessonRow(number: Int, video: VideoItem, onDownload: () -> Unit, onC
 
 /** true = به صف اضافه شد */
 private fun startDownload(ctx: android.content.Context, video: VideoItem, course: String, idx: Int, silent: Boolean = false): Boolean {
-    val dir = File(ctx.filesDir, "videos")
+    val dir = File(ctx.filesDir, "videos").apply { mkdirs() }
     if (File(dir, "${video.id}.enc").exists()) {
         if (!silent) Toast.makeText(ctx, "این ویدیو قبلاً دانلود شده است", Toast.LENGTH_SHORT).show()
         return false
@@ -180,8 +180,13 @@ private fun startDownload(ctx: android.content.Context, video: VideoItem, course
         if (!silent) Toast.makeText(ctx, "این ویدیو قبلاً یک‌بار دانلود شده و دوباره قابل دانلود نیست", Toast.LENGTH_LONG).show()
         return false
     }
-    File(dir, "${video.id}.dur").writeText((video.duration_sec ?: 0).toString())
-    com.app.aparatdownloader.download.enqueueDownload(ctx, video.id, video.title, course, idx)
+    try {
+        File(dir, "${video.id}.dur").writeText((video.duration_sec ?: 0).toString())
+        com.app.aparatdownloader.download.enqueueDownload(ctx, video.id, video.title, course, idx)
+    } catch (e: Exception) {
+        if (!silent) Toast.makeText(ctx, "خطا در شروع دانلود", Toast.LENGTH_SHORT).show()
+        return false
+    }
     if (!silent) Toast.makeText(ctx, "به صف دانلود اضافه شد", Toast.LENGTH_SHORT).show()
     return true
 }

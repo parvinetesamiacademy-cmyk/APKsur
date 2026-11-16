@@ -58,7 +58,11 @@ fun CourseCard(playlist: Playlist, onClick: () -> Unit) {
                 )
                 if (!cover.isNullOrBlank()) {
                     AsyncImage(
-                        model = cover,
+                        model = coil.request.ImageRequest.Builder(ctx)
+                            .data(cover)
+                            .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 13) Chrome/120 Mobile")
+                            .crossfade(true)
+                            .build(),
                         contentDescription = playlist.title,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.matchParentSize()
