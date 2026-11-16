@@ -17,48 +17,177 @@ import com.app.aparatdownloader.ui.theme.*
 import com.app.aparatdownloader.download.enqueueDownload
 import com.app.aparatdownloader.download.pauseDownload
 import com.app.aparatdownloader.download.cancelDownload
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.sp
+import com.app.aparatdownloader.data.WatchProgress
 import java.io.File
+
+private data class DlItem(val id: String, val title: String, val size: Long, val idx: Int, val course: String, val frac: Float)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DownloadsScreen(onPlay: (String, String) -> Unit) {
     val ctx = LocalContext.current
-    var files by remember { mutableStateOf(listOf<File>()) }
+    val dir = remember { File(ctx.filesDir, "videos") }
+    var dl by remember { mutableStateOf(listOf<DlItem>()) }
+    var toDelete by remember { mutableStateOf<DlItem?>(null) }
+
     fun load() {
-        files = File(ctx.filesDir, "videos").listFiles()
-            ?.filter { it.isFile && it.name.endsWith(".enc") }?.sortedBy { it.name } ?: emptyList()
+        dl = dir.listFiles()?.filter { it.isFile && it.name.endsWith(".enc") }?.map { f ->
+            val id = f.nameWithoutExtension
+            val (idx, course) = courseInfo(dir, id)
+            val dur = File(dir, "$id.dur").takeIf { it.exists() }?.readText()?.trim()?.toIntOrNull() ?: 0
+            DlItem(
+                id = id,
+                title = File(dir, "$id.title").takeIf { it.exists() }?.readText() ?: id,
+                size = f.length(), idx = idx, course = course,
+                frac = WatchProgress.fraction(ctx, id, dur)
+            )
+        }?.sortedBy { it.idx } ?: emptyList()
     }
     LaunchedEffect(Unit) { load() }
-    fun titleOf(f: File) = File(f.parentFile, f.nameWithoutExtension + ".title")
-        .takeIf { it.exists() }?.readText() ?: f.nameWithoutExtension
+
+    toDelete?.let { d ->
+        AlertDialog(
+            onDismissRequest = { toDelete = null },
+            title = { Text("حذف ویدیو؟") },
+            text = { Text("«${d.title}» از دستگاه حذف می‌شود. چون هر ویدیو فقط یک‌بار قابل دانلود است، بعد از حذف نمی‌توانید دوباره آن را دانلود کنید.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    File(dir, "${d.id}.enc").delete(); File(dir, "${d.id}.title").delete()
+                    File(dir, "${d.id}.course").delete(); File(dir, "${d.id}.dur").delete()
+                    WatchProgress.clear(ctx, d.id)
+                    toDelete = null; load()
+                }) { Text("حذف", color = Danger) }
+            },
+            dismissButton = { TextButton(onClick = { toDelete = null }) { Text("انصراف") } }
+        )
+    }
+
     Scaffold(
-        topBar = { TopAppBar(title = { Text("دوره‌های دانلودشده", color = TextPrimary) }, colors = TopAppBarDefaults.topAppBarColors(containerColor = Surface)) },
+        topBar = { TopAppBar(title = { Text("دوره‌های دانلودشده", color = TextPrimary, fontWeight = FontWeight.Bold) }, colors = TopAppBarDefaults.topAppBarColors(containerColor = Surface)) },
         containerColor = Background
     ) { pad ->
-        if (files.isEmpty()) {
+        if (dl.isEmpty()) {
             Box(Modifier.fillMaxSize().padding(pad), contentAlignment = Alignment.Center) {
                 Text("هنوز ویدیویی دانلود نشده است", color = TextSecondary)
             }
-        } else LazyColumn(Modifier.padding(pad).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            val dir0 = File(ctx.filesDir, "videos")
-            val groups = files.groupBy { courseInfo(dir0, it.nameWithoutExtension).second }
-            items(groups.keys.toList(), key = { it }) { cname ->
-                CourseBox(cname) {
-                    groups[cname]!!.sortedBy { courseInfo(dir0, it.nameWithoutExtension).first }.forEach { f ->
-                Card(onClick = { onPlay(f.nameWithoutExtension, titleOf(f)) }, colors = CardDefaults.cardColors(containerColor = Surface)) {
-                            Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(titleOf(f), color = TextPrimary, maxLines = 1)
-                                    Text(formatSize(f.length()) ?: "", color = TextSecondary)
-                                }
-                                IconButton(onClick = {
-                                    f.delete(); File(f.parentFile, f.nameWithoutExtension + ".title").delete(); load()
-                                }) { Icon(Icons.Default.Delete, "حذف", tint = Danger) }
-                            }
-                        }
-                            }
+        } else {
+            val groups = dl.groupBy { it.course }
+            val overall = dl.map { it.frac }.average().toFloat()
+            LazyColumn(
+                Modifier.padding(pad).padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+                contentPadding = PaddingValues(vertical = 12.dp)
+            ) {
+                item { OverallCard(groups.size, dl.size, overall) }
+                items(groups.keys.toList(), key = { it }) { cname ->
+                    val list = groups[cname]!!
+                    DownloadedCourseCard(cname, list, onPlay = { onPlay(it.id, it.title) }, onDelete = { toDelete = it })
                 }
             }
+        }
+    }
+}
+
+private fun faPct(f: Float) = "${(f * 100).toInt()}٪".toFa()
+
+@Composable
+private fun AnimatedBar(frac: Float, modifier: Modifier = Modifier, height: Dp = 8.dp, onGradient: Boolean = false) {
+    val f by animateFloatAsState(frac.coerceIn(0f, 1f), label = "bar")
+    val track = if (onGradient) Color.White.copy(alpha = 0.28f) else SurfaceContainerBorder
+    val fill = if (onGradient) Brush.horizontalGradient(listOf(Color.White, Color.White))
+        else Brush.horizontalGradient(if (frac >= 1f) listOf(Success, Success) else listOf(Primary, Accent))
+    Box(modifier.height(height).clip(RoundedCornerShape(50)).background(track)) {
+        Box(Modifier.fillMaxHeight().fillMaxWidth(f).clip(RoundedCornerShape(50)).background(fill))
+    }
+}
+
+@Composable
+private fun OverallCard(courses: Int, videos: Int, frac: Float) {
+    Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Surface), elevation = CardDefaults.cardElevation(2.dp)) {
+        Column(Modifier.fillMaxWidth().padding(18.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("پیشرفت کلی تماشا", fontWeight = FontWeight.Bold, color = TextPrimary, fontSize = 15.sp)
+                    Text("$courses دوره • $videos ویدیو".toFa(), color = TextSecondary, fontSize = 12.sp)
+                }
+                Text(faPct(frac), color = PrimaryDark, fontWeight = FontWeight.ExtraBold, fontSize = 24.sp)
+            }
+            Spacer(Modifier.height(12.dp))
+            AnimatedBar(frac, Modifier.fillMaxWidth(), height = 10.dp)
+        }
+    }
+}
+
+@Composable
+private fun DownloadedCourseCard(name: String, list: List<DlItem>, onPlay: (DlItem) -> Unit, onDelete: (DlItem) -> Unit) {
+    val courseFrac = list.map { it.frac }.average().toFloat()
+    val finished = list.count { it.frac >= 1f }
+    Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Surface), elevation = CardDefaults.cardElevation(2.dp)) {
+        Column {
+            Column(
+                Modifier.fillMaxWidth()
+                    .background(Brush.linearGradient(listOf(PrimaryDark, Primary, Accent)))
+                    .padding(18.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 17.sp, modifier = Modifier.weight(1f), maxLines = 2)
+                    Text(faPct(courseFrac), color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 22.sp)
+                }
+                Spacer(Modifier.height(4.dp))
+                Text("${list.size} ویدیو • $finished کامل‌شده".toFa(), color = Color.White.copy(alpha = 0.85f), fontSize = 12.sp)
+                Spacer(Modifier.height(12.dp))
+                AnimatedBar(courseFrac, Modifier.fillMaxWidth(), height = 10.dp, onGradient = true)
+            }
+            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                list.forEachIndexed { i, it ->
+                    DownloadedVideoRow(i + 1, it, onPlay = { onPlay(it) }, onDelete = { onDelete(it) })
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DownloadedVideoRow(number: Int, v: DlItem, onPlay: () -> Unit, onDelete: () -> Unit) {
+    val status = when { v.frac >= 1f -> "کامل شد"; v.frac > 0f -> "در حال تماشا"; else -> "تماشا نشده" }
+    val statusColor = when { v.frac >= 1f -> Success; v.frac > 0f -> PrimaryDark; else -> TextMuted }
+    Card(
+        onClick = onPlay, shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
+        border = androidx.compose.foundation.BorderStroke(1.dp, SurfaceContainerBorder)
+    ) {
+        Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(PrimaryLight), contentAlignment = Alignment.Center) {
+                Text(number.toString().toFa(), color = PrimaryDark, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+            }
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text(v.title, color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 14.sp, maxLines = 2)
+                Text(formatSize(v.size) ?: "", color = TextSecondary, fontSize = 11.sp)
+                Spacer(Modifier.height(6.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    AnimatedBar(v.frac, Modifier.weight(1f), height = 7.dp)
+                    Spacer(Modifier.width(8.dp))
+                    Text(faPct(v.frac), color = statusColor, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+                Text(status, color = statusColor, fontSize = 11.sp, modifier = Modifier.padding(top = 2.dp))
+            }
+            Spacer(Modifier.width(6.dp))
+            FilledIconButton(
+                onClick = onPlay, modifier = Modifier.size(42.dp),
+                colors = IconButtonDefaults.filledIconButtonColors(containerColor = Primary, contentColor = Color.White)
+            ) { Icon(Icons.Default.PlayArrow, "پخش") }
+            IconButton(onClick = onDelete) { Icon(Icons.Default.Delete, "حذف", tint = Danger) }
         }
     }
 }

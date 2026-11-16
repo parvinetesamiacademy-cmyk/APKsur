@@ -25,6 +25,8 @@ import com.app.aparatdownloader.security.VideoCrypto
 import com.app.aparatdownloader.ui.common.*
 import com.app.aparatdownloader.ui.theme.*
 import java.io.File
+import com.app.aparatdownloader.data.WatchProgress
+import kotlinx.coroutines.delay
 import android.app.Activity
 import android.content.ContextWrapper
 import android.content.pm.ActivityInfo
@@ -56,7 +58,13 @@ fun PlayerScreen(videoId: String, title: String, onBack: () -> Unit, onLogout: (
         }
     }
     BackHandler(enabled = fs) { fs = false }
+    fun saveProgress() {
+        val d = player.duration
+        if (d > 0) WatchProgress.save(ctx, videoId, player.currentPosition, d)
+    }
+    LaunchedEffect(Unit) { while (true) { delay(2000); if (player.isPlaying) saveProgress() } }
     DisposableEffect(Unit) { onDispose {
+        saveProgress()
         player.release()
         activity?.let { a ->
             a.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
@@ -74,6 +82,7 @@ fun PlayerScreen(videoId: String, title: String, onBack: () -> Unit, onLogout: (
             player.setMediaSource(
                 ProgressiveMediaSource.Factory(factory).createMediaSource(MediaItem.fromUri(Uri.fromFile(local)))
             )
+            WatchProgress.resumeAt(ctx, videoId).takeIf { it > 0 }?.let { player.seekTo(it) }
             player.prepare(); player.playWhenReady = true
             state = LoadState.Success(Unit)
         } else {

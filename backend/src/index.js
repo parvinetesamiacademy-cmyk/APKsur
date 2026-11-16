@@ -104,7 +104,7 @@ async function downloadStart(req, env, id) {
   const a = await authUser(req, env); if (a.error) return a.error;
   await dlTable(env);
   const r = await env.DB.prepare('SELECT status FROM downloads WHERE user_id=? AND video_id=?').bind(a.user.id, id).first();
-  if (r && r.status === 'done') return err('ALREADY_DOWNLOADED', 403);
+  // محدودیت دانلود سمت سرور حذف شد؛ کنترل فقط با اپ است
   await env.DB.prepare('INSERT OR REPLACE INTO downloads VALUES (?,?,?,?)').bind(a.user.id, id, 'started', now()).run();
   return json({ ok: true });
 }

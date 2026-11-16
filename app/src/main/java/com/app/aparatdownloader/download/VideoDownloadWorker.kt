@@ -48,7 +48,7 @@ fun cancelDownload(ctx: Context, id: String) {
     WorkManager.getInstance(ctx).cancelUniqueWork("dl_$id")
     val dir = File(ctx.filesDir, "videos")
     File(dir, "$id.part").delete()
-    if (!File(dir, "$id.enc").exists()) { File(dir, "$id.title").delete(); File(dir, "$id.course").delete() }
+    if (!File(dir, "$id.enc").exists()) { File(dir, "$id.title").delete(); File(dir, "$id.course").delete(); File(dir, "$id.dur").delete() }
 }
 
 class VideoDownloadWorker(
@@ -152,6 +152,7 @@ class VideoDownloadWorker(
         out.delete()
         part.renameTo(out)
         store.saveVideoKey(vid, key)
+        DownloadLimit.markUsed(applicationContext, vid)
         for (i in 0 until 3) { if (apiCall { api.downloadDone(vid) } is LoadState.Success) break }
         return Result.success()
     }
