@@ -192,7 +192,7 @@ fun AuthScreen(onLoginSuccess: () -> Unit) {
             Spacer(modifier = Modifier.height(20.dp))
 
             Text(
-                text = "آکادمی زبان انگلیسی",
+                text = "آکادمی زبان پروین اعتصامی",
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
                 color = TextPrimary

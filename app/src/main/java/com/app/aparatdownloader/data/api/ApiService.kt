@@ -22,7 +22,8 @@ data class Playlist(
     val cover_url: String?,
     val sort_order: Int?,
     val video_count: Int?,
-    val first_hash: String? = null
+    val first_hash: String? = null,
+    val description: String? = null
 )
 
 data class VideoItem(

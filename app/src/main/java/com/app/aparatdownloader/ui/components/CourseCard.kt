@@ -75,6 +75,10 @@ fun CourseCard(playlist: Playlist, onClick: () -> Unit) {
                     lineHeight = 24.sp,
                     maxLines = 2
                 )
+                if (!playlist.description.isNullOrBlank()) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(playlist.description, fontSize = 12.sp, color = TextSecondary, lineHeight = 18.sp, maxLines = 3)
+                }
                 Spacer(Modifier.height(12.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),

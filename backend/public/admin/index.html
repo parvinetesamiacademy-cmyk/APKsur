@@ -16,7 +16,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{border-bottom:1px
 <input id="n_name" placeholder="نام"><input id="n_phone" placeholder="شماره"><input id="n_nid" placeholder="کد ملی">
 <input id="n_pass" placeholder="رمز اولیه"><input id="n_days" type="number" value="30" style="width:70px"><button class="p" onclick="addUser()">ایجاد</button>
 <h3>دوره‌ها و ویدیوها</h3>
-<input id="p_title" placeholder="عنوان دوره جدید"><input id="p_cover" placeholder="لینک کاور (اختیاری)"><button class="p" onclick="addPl()">افزودن دوره</button>
+<input id="p_title" placeholder="عنوان دوره جدید"><input id="p_cover" placeholder="لینک کاور (اختیاری)"><input id="p_desc" placeholder="توضیح دوره (اختیاری)"><button class="p" onclick="addPl()">افزودن دوره</button>
 <div><select id="pl" onchange="loadVideos()"></select><button onclick="delPl()">حذف دوره</button></div>
 <div><input id="v_title" placeholder="عنوان درس"><input id="v_url" placeholder="لینک آپارات (aparat.com/v/...) یا هش" style="min-width:230px;direction:ltr"><input id="v_pos" type="number" placeholder="ترتیب" style="width:70px"><button class="p" onclick="addVideo()">افزودن درس</button></div>
 <div class="w"><table><thead><tr><th>ترتیب</th><th>عنوان</th><th>هش آپارات</th><th>لینک مستقیم</th><th></th></tr></thead><tbody id="vrows"></tbody></table></div>
@@ -44,7 +44,7 @@ async function loadPl(){const r=await api('playlists');pl.innerHTML=r.map(x=>`<o
 async function loadVideos(){vrows.innerHTML='';if(!pl.value)return;const r=await api('videos?playlist_id='+encodeURIComponent(pl.value));
  r.forEach(v=>{const tr=document.createElement('tr');tr.innerHTML=`<td>${v.position}</td><td>${esc(v.title)}</td><td dir=ltr>${esc(v.aparat_hash)}</td><td>${v.source_url?'✓':'—'}</td><td></td>`;
   const b=document.createElement('button');b.textContent='حذف';b.onclick=async()=>{if(confirm('حذف شود؟')){await api(`videos/${v.id}/delete`,'POST',{});loadVideos()}};tr.lastChild.appendChild(b);vrows.appendChild(tr)})}
-async function addPl(){if(!p_title.value)return;const r=await api('playlists','POST',{title:p_title.value,cover_url:p_cover.value});if(r.error)return alert(r.error);p_title.value=p_cover.value='';loadPl()}
+async function addPl(){if(!p_title.value)return;const r=await api('playlists','POST',{title:p_title.value,cover_url:p_cover.value,description:p_desc.value});if(r.error)return alert(r.error);p_title.value=p_cover.value=p_desc.value='';loadPl()}
 async function delPl(){if(pl.value&&confirm('دوره و همه درس‌هایش حذف شود؟')){await api(`playlists/${pl.value}/delete`,'POST',{});loadPl()}}
 async function addVideo(){const r=await api('videos','POST',{playlist_id:pl.value,title:v_title.value,aparat_url:v_url.value,position:+v_pos.value||0});if(r.error)return alert(r.error);v_title.value=v_url.value=v_pos.value='';loadVideos()}
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));

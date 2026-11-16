@@ -70,7 +70,21 @@ fun FolderDetailScreen(
                     ) {
                         item {
                             Spacer(Modifier.height(8.dp))
-                            SummaryCard(playlist.title, videos.size, formatSize(totalBytes))
+                            SummaryCard(playlist.title, playlist.description, videos.size, formatSize(totalBytes))
+                        }
+                        item {
+                            Button(
+                                onClick = {
+                                    val n = videos.count { startDownload(ctx, it, silent = true) }
+                                    Toast.makeText(ctx, if (n > 0) "$n ویدیو به صف دانلود اضافه شد".toFa() else "همه ویدیوها قبلاً دانلود شده‌اند", Toast.LENGTH_SHORT).show()
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(14.dp)
+                            ) {
+                                Icon(Icons.Default.Download, null)
+                                Spacer(Modifier.width(8.dp))
+                                Text("دانلود کل دوره")
+                            }
                         }
                         item {
                             Text(
@@ -93,7 +107,7 @@ fun FolderDetailScreen(
 }
 
 @Composable
-private fun SummaryCard(title: String, count: Int, size: String?) {
+private fun SummaryCard(title: String, description: String?, count: Int, size: String?) {
     Card(
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = Surface),
@@ -101,6 +115,10 @@ private fun SummaryCard(title: String, count: Int, size: String?) {
     ) {
         Column(Modifier.padding(18.dp).fillMaxWidth()) {
             Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = TextPrimary)
+            if (!description.isNullOrBlank()) {
+                Spacer(Modifier.height(8.dp))
+                Text(description, fontSize = 13.sp, color = TextSecondary, lineHeight = 20.sp)
+            }
             Spacer(Modifier.height(16.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Column {
@@ -151,14 +169,14 @@ private fun LessonRow(number: Int, video: VideoItem, onDownload: () -> Unit, onC
     }
 }
 
-private fun startDownload(ctx: android.content.Context, video: VideoItem) {
-    if (File(File(ctx.filesDir, "videos"), "${video.id}.enc").exists()) {
-        Toast.makeText(ctx, "این ویدیو قبلاً دانلود شده است", Toast.LENGTH_SHORT).show(); return
+/** true = به صف اضافه شد */
+private fun startDownload(ctx: android.content.Context, video: VideoItem, silent: Boolean = false): Boolean {
+    val dir = File(ctx.filesDir, "videos")
+    if (File(dir, "${video.id}.enc").exists()) {
+        if (!silent) Toast.makeText(ctx, "این ویدیو قبلاً دانلود شده است", Toast.LENGTH_SHORT).show()
+        return false
     }
-    val req = OneTimeWorkRequestBuilder<VideoDownloadWorker>()
-        .setInputData(workDataOf("video_id" to video.id, "title" to video.title))
-        .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
-        .addTag("dl").addTag("title:${video.title}").build()
-    WorkManager.getInstance(ctx).enqueueUniqueWork("dl_${video.id}", ExistingWorkPolicy.REPLACE, req)
-    Toast.makeText(ctx, "به صف دانلود اضافه شد", Toast.LENGTH_SHORT).show()
+    com.app.aparatdownloader.download.enqueueDownload(ctx, video.id, video.title)
+    if (!silent) Toast.makeText(ctx, "به صف دانلود اضافه شد", Toast.LENGTH_SHORT).show()
+    return true
 }

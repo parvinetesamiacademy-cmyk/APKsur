@@ -212,7 +212,7 @@ async function adminRoute(req, env, path) {
   if (path === '/admin/api/playlists') {
     if (m === 'GET') return json((await env.DB.prepare('SELECT * FROM playlists ORDER BY sort_order').all()).results);
     const b = await body(req); const id = b.id || randId(8);
-    await env.DB.prepare('INSERT OR REPLACE INTO playlists VALUES (?,?,?,?,?)').bind(id, b.title, b.cover_url || null, b.sort_order || 0, now()).run();
+    await env.DB.prepare('INSERT OR REPLACE INTO playlists (id,title,cover_url,sort_order,updated_at,description) VALUES (?,?,?,?,?,?)').bind(id, b.title, b.cover_url || null, b.sort_order || 0, now(), b.description || null).run();
     await audit(env, req, aid, 'save_playlist', id); return json({ id });
   }
   if (path === '/admin/api/videos') {

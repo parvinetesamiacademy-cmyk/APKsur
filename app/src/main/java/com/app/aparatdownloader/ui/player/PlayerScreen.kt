@@ -24,6 +24,16 @@ import com.app.aparatdownloader.security.VideoCrypto
 import com.app.aparatdownloader.ui.common.*
 import com.app.aparatdownloader.ui.theme.*
 import java.io.File
+import android.app.Activity
+import android.content.ContextWrapper
+import android.content.pm.ActivityInfo
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 
 @OptIn(ExperimentalMaterial3Api::class, UnstableApi::class)
 @Composable
@@ -34,7 +44,24 @@ fun PlayerScreen(videoId: String, title: String, onBack: () -> Unit, onLogout: (
     var state by remember { mutableStateOf<LoadState<Unit>>(LoadState.Loading) }
     var reloadKey by remember { mutableIntStateOf(0) }
 
-    DisposableEffect(Unit) { onDispose { player.release() } }
+    var fs by remember { mutableStateOf(true) }
+    val activity = remember(ctx) { var c = ctx; while (c is ContextWrapper && c !is Activity) c = c.baseContext; c as? Activity }
+    LaunchedEffect(fs) {
+        activity?.let { a ->
+            a.requestedOrientation = if (fs) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE else ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            val ic = WindowCompat.getInsetsController(a.window, a.window.decorView)
+            if (fs) { ic.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE; ic.hide(WindowInsetsCompat.Type.systemBars()) }
+            else ic.show(WindowInsetsCompat.Type.systemBars())
+        }
+    }
+    BackHandler(enabled = fs) { fs = false }
+    DisposableEffect(Unit) { onDispose {
+        player.release()
+        activity?.let { a ->
+            a.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            WindowCompat.getInsetsController(a.window, a.window.decorView).show(WindowInsetsCompat.Type.systemBars())
+        }
+    } }
 
     LaunchedEffect(reloadKey) {
         state = LoadState.Loading
@@ -65,26 +92,35 @@ fun PlayerScreen(videoId: String, title: String, onBack: () -> Unit, onLogout: (
         }
     }
 
+    val playerView: @Composable (Modifier) -> Unit = { m ->
+        AndroidView(modifier = m, factory = { c ->
+            PlayerView(c).apply {
+                this.player = player
+                setFullscreenButtonClickListener { enter -> fs = enter }
+            }
+        })
+    }
     Scaffold(
         topBar = {
-            TopAppBar(
+            if (!fs) TopAppBar(
                 title = { Text(title, color = TextPrimary, fontSize = 16.sp, maxLines = 1) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.Default.Close, "بستن", tint = TextPrimary) }
-                },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Default.Close, "بستن", tint = TextPrimary) } },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Surface)
             )
         },
-        containerColor = Background
+        containerColor = if (fs) Color.Black else Background
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
+        Box(Modifier.fillMaxSize().padding(if (fs) PaddingValues(0.dp) else padding).background(if (fs) Color.Black else Color.Transparent)) {
             when (val s = state) {
                 is LoadState.Loading -> LoadingState()
                 is LoadState.Error -> ErrorState(s, onRetry = { reloadKey++ }, onLogout = onLogout)
-                is LoadState.Success -> AndroidView(
-                    modifier = Modifier.fillMaxWidth().aspectRatio(16 / 9f),
-                    factory = { c -> PlayerView(c).apply { this.player = player } }
-                )
+                is LoadState.Success -> {
+                    if (fs) playerView(Modifier.fillMaxSize())
+                    else playerView(Modifier.fillMaxWidth().aspectRatio(16 / 9f))
+                }
+            }
+            if (fs) IconButton(onClick = onBack, modifier = Modifier.align(Alignment.TopStart).padding(8.dp)) {
+                Icon(Icons.Default.Close, "بستن", tint = Color.White)
             }
         }
     }
