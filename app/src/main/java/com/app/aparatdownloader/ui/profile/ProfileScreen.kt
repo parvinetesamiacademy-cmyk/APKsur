@@ -92,6 +92,10 @@ fun ProfileScreen(onLogout: () -> Unit) {
                                 Text((me.phone ?: "-").toFa(), fontWeight = FontWeight.Bold, color = TextPrimary)
                             }
                             Column {
+                                Text("سطح", fontSize = 11.sp, color = TextMuted)
+                                Text((me.level?.takeIf { it.isNotBlank() } ?: "-"), fontWeight = FontWeight.Bold, color = TextPrimary)
+                            }
+                            Column {
                                 Text("کد ملی ثبت‌شده", fontSize = 11.sp, color = TextMuted)
                                 Text("\u202A" + (me.national_id ?: me.national_id_mask ?: "-").toFa() + "\u202C", fontWeight = FontWeight.Bold, color = TextPrimary)
                             }

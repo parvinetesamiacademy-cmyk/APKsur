@@ -44,6 +44,7 @@ data class MeResponse(
     val phone: String?,
     val national_id_mask: String?,
     val national_id: String? = null,
+    val level: String? = null,
     val expires_at: Long?,
     val offline_days: Int?,
     val device_model: String?,
