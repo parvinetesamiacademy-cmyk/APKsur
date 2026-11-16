@@ -14,6 +14,9 @@ import androidx.compose.ui.unit.dp
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import com.app.aparatdownloader.ui.theme.*
+import com.app.aparatdownloader.download.enqueueDownload
+import com.app.aparatdownloader.download.pauseDownload
+import com.app.aparatdownloader.download.cancelDownload
 import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
