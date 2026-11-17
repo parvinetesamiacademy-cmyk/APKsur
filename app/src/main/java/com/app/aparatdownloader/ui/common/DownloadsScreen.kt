@@ -17,9 +17,6 @@ import com.app.aparatdownloader.ui.theme.*
 import com.app.aparatdownloader.download.enqueueDownload
 import com.app.aparatdownloader.download.pauseDownload
 import com.app.aparatdownloader.download.cancelDownload
-import com.app.aparatdownloader.download.enqueueDownload
-import com.app.aparatdownloader.download.pauseDownload
-import com.app.aparatdownloader.download.cancelDownload
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape

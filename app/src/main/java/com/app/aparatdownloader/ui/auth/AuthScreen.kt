@@ -20,7 +20,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Visibility
@@ -72,9 +72,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-// TODO(DEBUG): این دو مقدار و شرط ورود دیباگ را بعد از اتمام تست حذف کنید
-private const val DEBUG_PHONE = "0912000"
-private const val DEBUG_PASSWORD = "1234"
 
 private fun normalizeDigits(input: String): String =
     input.map { c ->
@@ -86,7 +83,7 @@ private fun normalizeDigits(input: String): String =
     }.joinToString("").trim()
 
 private fun messageFor(code: String?): String = when (code) {
-    "INVALID_CREDENTIALS" -> "شماره موبایل یا رمز عبور اشتباه است"
+    "INVALID_CREDENTIALS" -> "شماره موبایل یا کد ملی اشتباه است"
     "BANNED" -> "حساب شما مسدود شده است"
     "EXPIRED" -> "اعتبار حساب شما به پایان رسیده است"
     "DEVICE_MISMATCH" -> "این حساب روی دستگاه دیگری فعال شده است"
@@ -109,13 +106,7 @@ fun AuthScreen(onLoginSuccess: () -> Unit) {
         val p = normalizeDigits(phone)
         val pw = normalizeDigits(password)
         if (p.isEmpty() || pw.isEmpty()) {
-            errorMessage = "شماره موبایل و رمز عبور را وارد کنید"
-            return
-        }
-        // TODO(DEBUG): ورود دیباگ؛ بعد از تست حذف شود
-        if (p == DEBUG_PHONE && pw == DEBUG_PASSWORD) {
-            errorMessage = null
-            onLoginSuccess()
+            errorMessage = "شماره موبایل و کد ملی را وارد کنید"
             return
         }
         isLoading = true
@@ -240,23 +231,14 @@ fun AuthScreen(onLoginSuccess: () -> Unit) {
                             password = it
                             errorMessage = null
                         },
-                        label = { Text("رمز عبور") },
-                        leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
-                        trailingIcon = {
-                            IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                                Icon(
-                                    imageVector = if (passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                    contentDescription = null,
-                                    tint = TextMuted
-                                )
-                            }
-                        },
+                        label = { Text("کد ملی") },
+                        leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
                         singleLine = true,
-                        visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                        
                         shape = fieldShape,
                         colors = fieldColors,
                         keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Password,
+                            keyboardType = KeyboardType.Number,
                             imeAction = ImeAction.Done
                         ),
                         keyboardActions = KeyboardActions(onDone = { submit() }),

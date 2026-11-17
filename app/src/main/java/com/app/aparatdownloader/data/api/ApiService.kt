@@ -8,7 +8,7 @@ import retrofit2.http.Path
 
 data class LoginRequest(
     val phone: String,
-    val password: String,
+    val national_id: String,
     val device_id: String,
     val model: String? = null
 )
@@ -52,7 +52,12 @@ data class MeResponse(
     val server_time: Long?
 )
 
+data class PurchaseRequest(val level: String)
+
 interface ApiService {
+    @POST("purchase")
+    suspend fun purchase(@Body request: PurchaseRequest): Response<okhttp3.ResponseBody>
+
     @POST("auth/login")
     suspend fun login(@Body request: LoginRequest): Response<LoginResponse>
 
