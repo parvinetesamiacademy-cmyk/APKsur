@@ -1,5 +1,7 @@
 package com.app.aparatdownloader.ui.common
 
+import com.app.aparatdownloader.ui.onboarding.EmptyHint
+import com.app.aparatdownloader.ui.onboarding.EmptyHint
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -77,9 +79,7 @@ fun DownloadsScreen(onPlay: (String, String) -> Unit) {
         containerColor = Background
     ) { pad ->
         if (dl.isEmpty()) {
-            Box(Modifier.fillMaxSize().padding(pad), contentAlignment = Alignment.Center) {
-                Text("هنوز ویدیویی دانلود نشده است", color = TextSecondary)
-            }
+            EmptyHint("هنوز ویدیویی دانلود نشده است", "از تب «دوره‌ها» وارد درس شوید و دکمه دانلود را بزنید تا بدون اینترنت هم ببینید.", Modifier.padding(pad))
         } else {
             val groups = dl.groupBy { it.course }
             val overall = dl.map { it.frac }.average().toFloat()
@@ -251,7 +251,7 @@ fun QueueScreen() {
                 color = if (online) Primary else Danger, modifier = Modifier.padding(vertical = 8.dp)
             )
             if (active.isEmpty() && paused.isEmpty()) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("صف دانلود خالی است", color = TextSecondary) }
+                EmptyHint("صف دانلود خالی است", "ویدیوهایی که در حال دانلود یا متوقف شده‌اند اینجا نمایش داده می‌شوند.")
             } else {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = { active.forEach { pauseDownload(ctx, vidOf(it)) } }) { Text("توقف همه") }

@@ -54,7 +54,12 @@ data class MeResponse(
 
 data class PurchaseRequest(val level: String)
 
+data class RegisterRequest(val full_name: String, val phone: String, val national_id: String, val level: String, val device_id: String, val model: String? = null)
+
 interface ApiService {
+    @POST("auth/register")
+    suspend fun register(@Body request: RegisterRequest): Response<LoginResponse>
+
     @POST("purchase")
     suspend fun purchase(@Body request: PurchaseRequest): Response<okhttp3.ResponseBody>
 

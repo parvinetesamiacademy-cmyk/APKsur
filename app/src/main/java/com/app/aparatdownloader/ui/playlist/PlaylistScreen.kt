@@ -1,5 +1,6 @@
 package com.app.aparatdownloader.ui.playlist
 
+import com.app.aparatdownloader.ui.onboarding.EmptyHint
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -49,12 +50,7 @@ fun PlaylistScreen(onFolderClick: (Playlist) -> Unit, onLogout: () -> Unit) {
                 is LoadState.Success -> {
                     val list = s.data.sortedBy { it.sort_order ?: Int.MAX_VALUE }
                     if (list.isEmpty()) {
-                        Text(
-                            "هنوز دوره‌ای برای شما فعال نشده است",
-                            color = TextSecondary,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.align(Alignment.Center).padding(32.dp)
-                        )
+                        EmptyHint("هنوز دوره‌ای برای شما فعال نشده است", "ویدیوهای ترم شما به‌زودی توسط آکادمی اضافه می‌شود. صفحه را دوباره باز کنید یا با پشتیبانی تماس بگیرید.")
                     } else {
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),

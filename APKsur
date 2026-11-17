@@ -1,0 +1,8 @@
+cd ~/APKsur
+unzip -o /sdcard/Download/APKsur-fixed.zip -d ~/upd
+cp -rf ~/upd/APKsur-main/. .
+rm -rf ~/upd
+chmod +x gradlew
+git add -A
+git commit -m "fix: crash on download (mkdirs), cover image request headers"
+git push
